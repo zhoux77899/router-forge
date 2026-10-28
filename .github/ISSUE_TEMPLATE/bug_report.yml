@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a problem with Router Forge or its repository tooling.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check existing issues before reporting a problem.
+        Remove API keys, credentials, private prompts, and sensitive data from examples and logs.
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Describe the actions or commands needed to reproduce the problem.
+      placeholder: Include a minimal example and the relevant repository revision.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead? Include the error when available.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include your operating system, tool versions, and repository revision when relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or additional context
+      description: Paste relevant output after removing credentials and private data.
+      render: text
+    validations:
+      required: false

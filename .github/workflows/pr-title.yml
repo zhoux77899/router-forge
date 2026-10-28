@@ -1,0 +1,47 @@
+name: PR title
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-title:
+    name: PR title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node <<'NODE'
+          const prTypes = [
+            'Feat', 'Fix', 'Docs', 'Style', 'Refactor', 'Test',
+            'Chore', 'Perf', 'Build', 'Revert', 'CI', 'Deps',
+          ];
+
+          function isPrTitle(title) {
+            if (typeof title !== 'string' || title !== title.trim()
+              || /[\r\n\u2028\u2029]/u.test(title)) return false;
+            const match = /^\[([A-Za-z]+)\] (\S.*)$/.exec(title);
+            return Boolean(match && prTypes.includes(match[1]));
+          }
+
+          if (!isPrTitle(process.env.PR_TITLE)) {
+            console.error(`PR title must use [Type] Description. Allowed types: ${prTypes.join(', ')}.`);
+            process.exitCode = 1;
+          } else {
+            console.log('PR title follows [Type] Description.');
+          }
+          NODE

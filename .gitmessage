@@ -1,0 +1,12 @@
+
+# Write a title above: type(scope): imperative description
+#
+# Add a blank line, then a prose body explaining the motivation or implementation.
+# Comments and trailers alone do not satisfy the body requirement.
+#
+# Types: feat, fix, docs, style, refactor, test, chore, perf, build, revert, ci, deps
+# Use a nonblank, stable scope and English wording.
+#
+# Leave a blank line before trailers. Use git commit -s to add Signed-off-by from
+# your configured Git identity. Co-authored-by does not replace Signed-off-by.
+# See CONTRIBUTING.md for examples and PR rules.
