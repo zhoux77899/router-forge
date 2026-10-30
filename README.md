@@ -11,7 +11,7 @@ or the local read-only Web dashboard.
   HugeIcons, outline/border focus instead of rings or shadows, a separate Go backend,
   and SQLite persistence. Layout explains the workflow without redundant labels.
 - Local, WSL and SSH environments, connection checks and tool/agent detection.
-- A separate Network page with explicitly selected, revisioned profiles for source,
+- Settings → Network with explicitly selected, revisioned profiles for source,
   build, agent, verifier and Desktop model traffic. First use has no selected network
   modes, addresses, mirrors, CA or TLS policy.
 - Native Chat Completions, Responses and Anthropic Messages forwarding, including
@@ -134,7 +134,7 @@ rerun.
 
 ### Network profiles
 
-Open the independent **Network** page and select either **Desktop model traffic**
+Open **设置 → 网络 (Settings → Network)** and select either **Desktop model traffic**
 or one exact saved Windows/WSL/SSH Environment. Nothing is selected on first use;
 Direct, System CA, Strict and Native are choices, not implied defaults. Processes
 do not inherit Proxy/Mirror/CA/TLS policy from host environment variables or legacy
@@ -223,7 +223,18 @@ separately. A completed worker without an independent reward is a failed executi
 Missing/partial provider usage or undocumented prices remain unknown, not exact zero.
 Cost estimates use the approved price source and currency; they are not provider invoices.
 
-The backend URL shown by Desktop serves the built **read-only** Web dashboard on
+Desktop navigation contains **评测 (Evaluation)** and **结果 (Results)**. The sidebar
+footer opens Settings: appearance, execution environments, models, network and
+backend diagnostics. The custom titlebar keeps native window controls; macOS keeps
+its system application menu. Wide-screen sidebar expansion is remembered; narrow
+screens retain an icon rail with an overlay when expanded. Unsaved evaluation and
+settings forms survive page/category switches in memory, not a refresh; they are
+not autosaved or stored in browser storage. App-drawn text uses `text-xs` throughout.
+
+Web navigation contains Results only, with a read-only indicator and appearance-only
+settings in the sidebar footer. It has no application titlebar or native controls.
+
+The backend URL shown in Desktop **设置 → 诊断 (Settings → Diagnostics)** serves the built **read-only** Web dashboard on
 loopback. Its GET-only facade exposes results, events, request metadata and approved
 public snapshots, not Network management, protected configuration or credentials.
 The native private API remains private. Public deployment and browser-side

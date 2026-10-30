@@ -227,6 +227,17 @@ storage, transports or views:
   HugeIcons. No ring/shadow effects, including focus and overlays; retain visible
   outline/border focus. Remove redundant secondary labels/descriptions, not accessible
   names, errors, server-identity/MITM disclosure or cost confirmation.
+- Keep Desktop main navigation limited to evaluation/results, with settings and
+  collapse in the sidebar footer. Web has results and appearance-only settings,
+  without a topbar or native controls. Retain the narrow-screen icon rail and use
+  an overlay for expansion; do not overwrite the saved wide-screen preference.
+- Use `text-xs` for all App-drawn text, including headings, inputs and overlays;
+  preserve icon sizes, hit targets and control heights. Native system UI is exempt.
+  Keep visited evaluation/settings forms mounted in memory; never autosave drafts
+  or persist their credentials in browser storage.
+- Desktop uses MyGo's hidden titlebar with native controls and platform insets;
+  mark buttons no-drag and keep macOS's system application menu. Native acceptance
+  must be performed on the corresponding OS, not inferred from browser tests.
 - Web and shared results have only a GET-only snapshot facade. Do not expose Network
   management, protected configuration, native control tokens or private credentials.
 

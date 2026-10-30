@@ -18,6 +18,18 @@ test("Web entry uses same-origin read-only API, no native bridge or control surf
   expect(html).toContain("只读 Web"); expect(html).not.toContain('type="password"'); expect(html).not.toContain("确认并启动这一个任务");
 });
 
+test("Web offers Results-only navigation and footer settings without a top area", () => {
+  const cache = new QueryClient();
+  const html = renderToStaticMarkup(<QueryClientProvider client={cache}><App /></QueryClientProvider>);
+  expect(html).toContain('aria-label="Web 导航"');
+  expect(html).toContain('aria-label="设置"');
+  expect(html).toContain('aria-label="切换导航栏"');
+  expect(html).toContain('data-slot="sidebar-footer"');
+  expect(html).not.toContain("<header");
+  expect(html).not.toContain("新建评测");
+  cache.clear();
+});
+
 test("Vite dev proxy is loopback-only and never takes control credentials", () => {
   expect(validateProxyOrigin(undefined)).toBeUndefined();
   expect(validateProxyOrigin("http://127.0.0.1:1234")).toBe("http://127.0.0.1:1234");
@@ -44,7 +56,7 @@ test("Web uses system light or dark without storing credentials or adding config
       queryClient.setQueryData(["runs", 20, 0], { items: [], total: 0 });
       queryClient.setQueryData(["attach-run"], null);
       const html = renderToStaticMarkup(<QueryClientProvider client={queryClient}><App /></QueryClientProvider>);
-      expect(html).toContain(`data-theme="${dark ? "dark" : "light"}"`); expect(html).toContain(`aria-pressed="${dark}"`);
+      expect(html).toContain(`data-theme="${dark ? "dark" : "light"}"`);
       expect(mediaQueries).toEqual(["(prefers-color-scheme: dark)"]);
       expect(html).toContain("只读 Web"); expect(html).not.toContain('type="password"'); expect(html).not.toContain("新建评测"); expect(html).not.toContain("网络配置");
       queryClient.clear();

@@ -10,10 +10,14 @@ import (
 )
 
 type nativeSmokeReadout struct {
-	Ready bool   `json:"ready"`
-	PID   int    `json:"pid"`
-	URL   string `json:"url"`
-	Error string `json:"error,omitempty"`
+	Ready      bool   `json:"ready"`
+	PID        int    `json:"pid"`
+	URL        string `json:"url"`
+	Chrome     bool   `json:"chrome"`
+	Typography bool   `json:"typography"`
+	InsetLeft  string `json:"inset_left"`
+	InsetRight string `json:"inset_right"`
+	Error      string `json:"error,omitempty"`
 }
 
 func nativeSmokeResultPath() string { return os.Getenv("ROUTER_FORGE_NATIVE_SMOKE_RESULT") }
@@ -26,8 +30,16 @@ func verifyNativeWindow(win *mygo.Window, resultPath string) {
 	for time.Now().Before(deadline) {
 		readout, err := mygo.EvalAs[nativeSmokeReadout](win.Page(), `
 const node = document.querySelector('[data-native-backend="true"]');
-return {ready: node?.dataset.apiReady === 'true', pid: Number(node?.dataset.backendPid || 0), url: node?.dataset.backendUrl || ''};`)
-		if err == nil && readout.Ready && readout.PID > 0 {
+const titlebar = document.querySelector('[data-slot="desktop-titlebar"]');
+const root = getComputedStyle(document.documentElement);
+return {
+  ready: node?.dataset.apiReady === 'true', pid: Number(node?.dataset.backendPid || 0), url: node?.dataset.backendUrl || '',
+  chrome: !!titlebar && titlebar.getBoundingClientRect().height >= 40 && getComputedStyle(titlebar).getPropertyValue('--app-region').trim() === 'drag',
+  typography: getComputedStyle(document.body).fontSize === '12px' && !!node?.querySelector('h1') && getComputedStyle(node.querySelector('h1')).fontSize === '12px',
+  inset_left: root.getPropertyValue('--mygo-titlebar-inset-left').trim(),
+  inset_right: root.getPropertyValue('--mygo-titlebar-inset-right').trim()
+};`)
+		if err == nil && readout.Ready && readout.PID > 0 && readout.Chrome && readout.Typography {
 			result = readout
 			break
 		}

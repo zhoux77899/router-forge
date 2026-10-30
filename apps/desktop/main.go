@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"path/filepath"
+	"runtime"
 
 	backend "github.com/zhoux77899/router-forge/internal/runtime"
 
@@ -24,14 +25,19 @@ func main() {
 		mygo.App.SetPath(mygo.PathLogs, filepath.Join(*dataDir, "renderer-logs"))
 	}
 	mygo.Bind(console)
+	if runtime.GOOS != "darwin" {
+		mygo.App.SetMenu(nil)
+	}
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:     "Router Forge",
-			Width:     1360,
-			Height:    880,
-			MinWidth:  980,
-			MinHeight: 640,
-			URL:       "/",
+			Title:          "Router Forge",
+			Width:          1360,
+			Height:         880,
+			MinWidth:       980,
+			MinHeight:      640,
+			URL:            "/",
+			TitleBarStyle:  mygo.TitleBarHidden,
+			TitleBarHeight: 40,
 		})
 		if result := nativeSmokeResultPath(); result != "" {
 			go verifyNativeWindow(win, result)

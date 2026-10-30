@@ -94,6 +94,19 @@ test("light and dark use official Neutral semantic values and monochrome sidebar
   expect(styles).toContain("@media (prefers-reduced-motion: reduce)")
 })
 
+test("application typography uses text-xs without shrinking input and button hit targets", () => {
+  for (const element of [<Button>Action</Button>, <Input />, <Textarea />]) {
+    const html = renderToStaticMarkup(element);
+    expect(html).toContain("text-xs");
+    expect(html).not.toMatch(/\btext-(?:sm|base|lg|xl)\b/);
+  }
+  expect(renderToStaticMarkup(<Button>Action</Button>)).toContain("h-9");
+  expect(styles).toContain("@apply text-xs");
+  for (const name of primitiveFiles) {
+    expect(readFileSync(join(import.meta.dir, name), "utf8")).not.toMatch(/\btext-(?:sm|base|lg|xl|[2-9]xl)\b/);
+  }
+});
+
 test("button sizes and variants preserve visible focus without introducing effects", () => {
   for (const variant of ["default", "destructive", "outline", "secondary", "ghost", "link"] as const) {
     for (const size of ["default", "xs", "sm", "lg", "icon", "icon-xs", "icon-sm", "icon-lg"] as const) {

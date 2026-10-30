@@ -1,6 +1,14 @@
 # Router Forge Desktop
 
-MyGo v0.7.1 原生桌面是 Router Forge 的唯一配置、创建草稿、付费确认、启动和取消入口。React 19、TanStack Query、Vite 与共享 shadcn 组件提供独立 Network、执行环境、固定模型、单任务和结果视图。界面使用默认 Neutral 黑白明暗主题、HugeIcons 与 outline / border focus，不使用 ring / shadow；让布局解释流程，保留必要的无障碍名称、错误、风险与费用确认。普通浏览器打开此 renderer 时只显示原生桥接不可用提示，不回退到浏览器控制请求。
+MyGo v0.7.1 原生桌面是 Router Forge 的唯一配置、创建草稿、付费确认、启动和取消入口。React 19、TanStack Query、Vite 与共享 shadcn 组件提供评测、结果及设置视图；设置统一管理外观、执行环境、模型、网络和诊断。界面使用默认 Neutral 黑白明暗主题、HugeIcons 与 outline / border focus，不使用 ring / shadow；让布局解释流程，保留必要的无障碍名称、错误、风险与费用确认。普通浏览器打开此 renderer 时只显示原生桥接不可用提示，不回退到浏览器控制请求。
+
+## 导航与窗口
+
+主导航仅保留评测和结果；设置与侧栏展开/折叠位于底部。运行任务数显示在评测项，折叠时仍可见。宽屏记住展开偏好，窄屏保留图标栏并覆盖展开，选择页面后关闭覆盖层；Ctrl/Cmd+B 和顶栏按钮均可切换侧栏。
+
+MyGo 隐藏标题栏模式由 App 绘制 40px 顶栏，保留系统窗口控件和对应平台占位。顶栏只包含侧栏按钮与拖动区域；Windows/Linux 不显示窗口菜单栏，macOS 保留系统应用菜单。App 自绘文字统一 `text-xs`，不缩小图标、控件高度或点击热区。
+
+设置及评测表单首次访问后保留在会话内，切换页面或设置分类不丢失未保存输入；不自动保存、不将表单或凭据写入浏览器存储，刷新不恢复草稿。后端 URL、版本/PID、重新附着及打开只读 Web 位于 **设置 → 诊断**。Web 仅有结果和外观设置，不提供原生控件或配置写入。
 
 ## 开发
 
@@ -52,7 +60,7 @@ build\desktop\windows-amd64\
 
 ## Network 配置
 
-独立 **Network** 页面先选择目标：Desktop 模型流量，或一个精确的已保存 Windows / WSL / SSH Environment。首次使用没有任何网络模式、地址、CA、TLS 或来源预选；Direct、System、Strict、Native 都必须显式选择。不从宿主环境变量或旧 Environment 字段推断、继承策略。
+**设置 → 网络** 页面先选择目标：Desktop 模型流量，或一个精确的已保存 Windows / WSL / SSH Environment。首次使用没有任何网络模式、地址、CA、TLS 或来源预选；Direct、System、Strict、Native 都必须显式选择。不从宿主环境变量或旧 Environment 字段推断、继承策略。
 
 | 配置 | 显式选择 |
 | --- | --- |
@@ -87,6 +95,8 @@ Docker gateway 必须显式选择 **detect / manual**，manual 需填写地址�
 - 不展示或保存模型原始 prompt / output；Harbor 私有产物仍可能含敏感内容，不能作为公共结果或截图发布。
 
 ## 修改与验证
+
+本次 UI 重构已在实际 Windows 原生包验证：无窗口菜单栏、最大化/最小化/恢复正常状态、后端仍响应、40px 拖动区域、138px 右侧原生控件占位，以及正文/标题 12px。浏览器验收覆盖宽窄屏导航、明暗主题、只读 Web、会话草稿保留及不写入浏览器存储。Win32 状态检查不等同于鼠标交互验收：拖动、双击、边缘缩放、Snap Layouts 和关闭按钮仍需手动检查；macOS 信号灯/系统菜单/全屏及 Linux 装饰行为需在对应系统验收。
 
 app manifest 已定义以下命令（在本目录执行；Bun 来自根 workspace 的 packageManager）：
 

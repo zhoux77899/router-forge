@@ -92,26 +92,19 @@ function workspaceMarkup() {
   return html;
 }
 
-test("Sidebar navigation marks the current view and keeps diagnostics out of the minimal header", () => {
+test("Desktop keeps only evaluation/results navigation and footer settings below native App chrome", () => {
   const html = workspaceMarkup();
   expect(html).toContain('data-slot="sidebar"');
-  expect(html).toContain('data-slot="sidebar-menu"');
   expect(html).toContain('aria-label="桌面控制台导航"');
   expect(html).toContain('aria-label="切换导航栏"');
   expect(html).toContain('aria-current="page"');
-  for (const label of ["结果", "新建评测", "执行环境", "模型", "后端诊断"]) expect(html).toContain(label);
-  expect(html).toContain('data-slot="collapsible-content"');
-  expect(html).toContain('aria-expanded="false"');
-  expect(html).toContain("D:\\RouterForgeTest\\data");
-  expect(html).toContain("http://127.0.0.1:42731");
-  expect(html).toContain("打开只读结果 Web");
+  for (const label of ["结果", "评测", "设置"]) expect(html).toContain(label);
+  const navigation = html.match(/<nav\b[^>]*aria-label="桌面控制台导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
+  expect(navigation).not.toMatch(/执行环境|模型|网络|设置|Router Forge/);
+  expect(html).not.toContain("后端诊断");
+  expect(html).not.toContain("打开只读结果 Web");
+  expect(html).toContain('data-slot="desktop-titlebar"');
   const header = html.match(/<header\b[^>]*>([\s\S]*?)<\/header>/)?.[1];
   expect(header).toBeDefined();
-  expect(header).not.toContain("127.0.0.1");
-  expect(header).not.toContain("PID");
-  expect(header).not.toContain("RouterForgeTest");
-});
-
-test("Network navigation is available without issuing network operations while rendering results", () => {
-  expect(workspaceMarkup()).toContain("<span>网络</span>");
+  expect(header).not.toMatch(/<h1|深色模式|任务执行中|127\.0\.0\.1|PID|RouterForgeTest/);
 });

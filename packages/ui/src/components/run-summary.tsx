@@ -25,7 +25,7 @@ export function MeteringSummary({ summary }: { summary: RequestSummary }) {
   ] as const;
   const costs = summary.costs ?? [];
   return <section aria-label="请求账本" className="flex flex-col gap-4">
-    <dl className="grid grid-cols-2 gap-5 md:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:text-base [&_dd]:font-semibold">
+    <dl className="grid grid-cols-2 gap-5 md:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:text-xs [&_dd]:font-semibold">
       <div><dt>请求 / 推理</dt><dd className="numeric">{summary.request_count} / {summary.inference_count}</dd></div>
       {fields.map(([field, label]) => <div key={field}><dt>{label}</dt><dd className="numeric">{summaryToken(summary, field)}</dd></div>)}
       <div className="col-span-2 md:col-span-3"><dt>成本</dt><dd>
