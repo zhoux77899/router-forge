@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { attemptFixture, requestFixture, testSummary } from "./fixtures.test-support";
-import { formatCost, formatDecimal, formatLatency, formatTime, formatTokens, hasAgentObservation, infrastructureLabel, missingObservation, rewardLabel, runtimeToolVersion, safeMessage, summaryToken, usageLabel } from "./format";
+import { formatCost, formatDecimal, formatLatency, formatTime, formatTokens, harborTLSPolicyLabel, hasAgentObservation, infrastructureLabel, missingObservation, rewardLabel, runtimeToolVersion, safeMessage, summaryToken, usageLabel } from "./format";
 
 test("actual tool versions preserve successful custom output without numerical gates or defaults", () => {
   expect(runtimeToolVersion(undefined, "harbor", "尚未观测")).toBe("尚未观测");
@@ -11,6 +11,12 @@ test("actual tool versions preserve successful custom output without numerical g
   expect(runtimeToolVersion(runtime, "missing", "未记录")).toBe("未记录");
   for (const state of ["draft", "preparing", "running", "cancelling"]) expect(missingObservation(state)).toBe("尚未观测");
   for (const state of ["completed", "failed", "cancelled"]) expect(missingObservation(state)).toBe("未记录");
+});
+
+test("TLS policy labels require explicit opt-in and default missing historical settings to strict configuration", () => {
+  expect(harborTLSPolicyLabel(undefined)).toBe("严格验证 Harbor TLS（默认）");
+  expect(harborTLSPolicyLabel(false)).toBe("严格验证 Harbor TLS（默认）");
+  expect(harborTLSPolicyLabel(true)).toBe("跳过 Harbor TLS 验证（不安全）");
 });
 
 test("agent observation requires a real CLI version and persisted acknowledgment, not raw output alone", () => {

@@ -100,6 +100,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/network-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listNetworkProfiles"];
+        put?: never;
+        post: operations["saveNetworkProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/network-profiles/{id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkNetworkProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/providers": {
         parameters: {
             query?: never;
@@ -278,20 +310,39 @@ export interface components {
             currency: string;
             estimated: boolean;
         };
+        DockerNetworkObservation: {
+            http_proxy?: string;
+            https_proxy?: string;
+            mirrors: string[];
+            no_proxy?: string;
+            observed_at: string;
+        };
         Environment: {
             ca_cert_path?: string;
             created_at: string;
             distribution?: string;
+            /**
+             * @description Explicitly opt into detecting the actual Docker bridge or configure docker_host_gateway manually. No address is prefilled.
+             * @enum {string}
+             */
+            docker_gateway_mode?: "detect" | "manual";
             docker_host_gateway?: string;
             host?: string;
             id: string;
             identity_file?: string;
             known_hosts_file?: string;
             name: string;
+            networks?: components["schemas"]["EnvironmentNetworks"] | null;
             no_proxy?: string;
             /** Format: int64 */
             port?: number;
             proxy_url?: string;
+            /**
+             * @deprecated
+             * @description Historical environment field; omitted means false and old records remain readable. New format-3 runs use separately approved network profiles, not this field. Does not relax model HTTPS, SSH host checks, Docker daemon/pulls or original Dockerfile/verifier.
+             * @default false
+             */
+            skip_tls_verification?: boolean;
             tools?: {
                 [key: string]: string;
             };
@@ -305,16 +356,28 @@ export interface components {
             ca_cert_path?: string;
             created_at?: string;
             distribution?: string;
+            /**
+             * @description Explicitly opt into detecting the actual Docker bridge or configure docker_host_gateway manually. No address is prefilled.
+             * @enum {string}
+             */
+            docker_gateway_mode?: "detect" | "manual";
             docker_host_gateway?: string;
             host?: string;
             id?: string;
             identity_file?: string;
             known_hosts_file?: string;
             name: string;
+            networks?: components["schemas"]["EnvironmentNetworks"] | null;
             no_proxy?: string;
             /** Format: int64 */
             port?: number;
             proxy_url?: string;
+            /**
+             * @deprecated
+             * @description Historical environment field; omitted means false and old records remain readable. New format-3 runs use separately approved network profiles, not this field. Does not relax model HTTPS, SSH host checks, Docker daemon/pulls or original Dockerfile/verifier.
+             * @default false
+             */
+            skip_tls_verification?: boolean;
             tools?: {
                 [key: string]: string;
             };
@@ -323,6 +386,12 @@ export interface components {
             work_dir?: string;
             worker_arch?: string;
             worker_os?: string;
+        };
+        EnvironmentNetworks: {
+            agent_profile_id: string;
+            build_profile_id: string;
+            source_profile_id: string;
+            verifier_profile_id: string;
         };
         Error: {
             error: string;
@@ -345,6 +414,7 @@ export interface components {
             agents: components["schemas"]["Agent"][];
             arch: string;
             docker_gateway?: string;
+            docker_network?: components["schemas"]["DockerNetworkObservation"] | null;
             environment_id: string;
             home_dir: string;
             issues: string[];
@@ -382,6 +452,82 @@ export interface components {
             protocol: "chat_completions" | "responses" | "anthropic_messages";
             provider_id: string;
         };
+        NetworkCheck: {
+            ca_sha256?: string;
+            http_status?: number | null;
+            issues: string[];
+            observed_at: string;
+            profile_id: string;
+            profile_revision: string;
+            reachable: boolean;
+            target_url: string;
+            tls_verified?: boolean | null;
+        };
+        NetworkCheckInput: {
+            confirm_tls_risk?: boolean;
+            profile_revision: string;
+            target_url: string;
+        };
+        NetworkMirrors: {
+            apt: components["schemas"]["NetworkSource"];
+            node: components["schemas"]["NetworkSource"];
+            npm: components["schemas"]["NetworkSource"];
+            pypi: components["schemas"]["NetworkSource"];
+            uv: components["schemas"]["NetworkSource"];
+            uv_python: components["schemas"]["NetworkSource"];
+        };
+        /** @description Explicit host-scoped network settings, no inherited proxy/mirror/CA/TLS defaults. Public profile metadata is immutable per revision; proxy credential values are never included. Configuration selection does not prove every connection succeeded. */
+        NetworkProfile: {
+            ca_cert_path?: string;
+            created_at: string;
+            credential_revision?: string;
+            environment_id?: string;
+            has_credentials: boolean;
+            id: string;
+            mirrors?: components["schemas"]["NetworkMirrors"] | null;
+            name: string;
+            no_proxy?: string;
+            /** @enum {string} */
+            proxy_auth?: "none" | "basic";
+            /** @enum {string} */
+            proxy_mode: "direct" | "proxy";
+            proxy_targets?: ("http" | "https" | "all")[];
+            proxy_url?: string;
+            /** @enum {string} */
+            relay_mode?: "loopback" | "docker";
+            revision: string;
+            /** @enum {string} */
+            scope: "desktop" | "environment";
+            /** @enum {string} */
+            tls_mode: "verify" | "skip";
+            /** @description Server-derived confirmation for this exact saved revision. Every edited skip-mode save requires confirm_tls_risk; start additionally requires independently hash-bound scope confirmation. */
+            readonly tls_risk_accepted: boolean;
+            /** @enum {string} */
+            trust_mode: "system" | "custom";
+        };
+        NetworkProfileInput: {
+            clear_credentials?: boolean;
+            confirm_tls_risk?: boolean;
+            profile: components["schemas"]["NetworkProfile"];
+            /** @description Stored as plaintext only in the permission-restricted local SQLite database; never returned. Omit/null to retain this field. Use clear_credentials to clear active and historical values; this is not cryptographic disk erasure. */
+            proxy_password?: string | null;
+            /** @description Stored as plaintext only in the permission-restricted local SQLite database; never returned. Omit/null to retain this field. Use clear_credentials to clear active and historical values; this is not cryptographic disk erasure. */
+            proxy_username?: string | null;
+        };
+        /** @description Frozen public source/build/agent/verifier/model profiles and independent credential revisions included in the format-3 approval hash. No proxy credential values. Original Dockerfile build and verifier checks are not relaxed. */
+        NetworkSnapshot: {
+            agent: components["schemas"]["NetworkProfile"];
+            build: components["schemas"]["NetworkProfile"];
+            model: components["schemas"]["NetworkProfile"];
+            source: components["schemas"]["NetworkProfile"];
+            verifier: components["schemas"]["NetworkProfile"];
+        };
+        NetworkSource: {
+            /** @enum {string} */
+            mode: "native" | "custom";
+            sources?: string;
+            url?: string;
+        };
         Pricing: {
             cache_read_per_million?: string | null;
             cache_write_per_million?: string | null;
@@ -400,6 +546,7 @@ export interface components {
             key_hint?: string;
             key_revision?: string;
             name: string;
+            network_profile_id?: string;
         };
         ProviderInput: {
             /** @description Stored as plaintext in the private local SQLite database. Omit/null to retain; empty string clears active and historical credential values. Clearing is not cryptographic disk erasure. */
@@ -407,6 +554,7 @@ export interface components {
             base_url: string;
             id?: string;
             name: string;
+            network_profile_id?: string | null;
         };
         RequestRecord: {
             actual_model: string;
@@ -494,6 +642,7 @@ export interface components {
             format_version?: number;
             harbor_version: string;
             model: components["schemas"]["Model"];
+            network?: components["schemas"]["NetworkSnapshot"] | null;
             preflight_tools?: components["schemas"]["ToolStatus"][];
             provider: components["schemas"]["Provider"];
             registry_kind?: string;
@@ -548,6 +697,9 @@ export interface components {
             work_dir?: string;
         };
         StartInput: {
+            config_hash: string;
+            confirm_execution_tls_risk?: boolean;
+            confirm_model_tls_risk?: boolean;
             confirm_paid: boolean;
         };
         Status: {
@@ -989,6 +1141,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Model"];
+                };
+            };
+            /** @description Invalid configuration */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Control authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid state or incompatible environment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listNetworkProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkProfile"][];
+                };
+            };
+            /** @description Invalid configuration */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Control authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid state or incompatible environment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    saveNetworkProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkProfileInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkProfile"];
+                };
+            };
+            /** @description Invalid configuration */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Control authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid state or incompatible environment */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    checkNetworkProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkCheckInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkCheck"];
                 };
             };
             /** @description Invalid configuration */

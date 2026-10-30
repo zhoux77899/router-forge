@@ -204,6 +204,34 @@
         ],
         "type": "object"
       },
+      "DockerNetworkObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "http_proxy": {
+            "type": "string"
+          },
+          "https_proxy": {
+            "type": "string"
+          },
+          "mirrors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "no_proxy": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mirrors",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "Environment": {
         "additionalProperties": false,
         "properties": {
@@ -214,6 +242,14 @@
             "type": "string"
           },
           "distribution": {
+            "type": "string"
+          },
+          "docker_gateway_mode": {
+            "description": "Explicitly opt into detecting the actual Docker bridge or configure docker_host_gateway manually. No address is prefilled.",
+            "enum": [
+              "detect",
+              "manual"
+            ],
             "type": "string"
           },
           "docker_host_gateway": {
@@ -234,6 +270,16 @@
           "name": {
             "type": "string"
           },
+          "networks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentNetworks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "no_proxy": {
             "type": "string"
           },
@@ -243,6 +289,12 @@
           },
           "proxy_url": {
             "type": "string"
+          },
+          "skip_tls_verification": {
+            "default": false,
+            "deprecated": true,
+            "description": "Historical environment field; omitted means false and old records remain readable. New format-3 runs use separately approved network profiles, not this field. Does not relax model HTTPS, SSH host checks, Docker daemon/pulls or original Dockerfile/verifier.",
+            "type": "boolean"
           },
           "tools": {
             "additionalProperties": {
@@ -286,6 +338,14 @@
           "distribution": {
             "type": "string"
           },
+          "docker_gateway_mode": {
+            "description": "Explicitly opt into detecting the actual Docker bridge or configure docker_host_gateway manually. No address is prefilled.",
+            "enum": [
+              "detect",
+              "manual"
+            ],
+            "type": "string"
+          },
           "docker_host_gateway": {
             "type": "string"
           },
@@ -304,6 +364,16 @@
           "name": {
             "type": "string"
           },
+          "networks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentNetworks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "no_proxy": {
             "type": "string"
           },
@@ -313,6 +383,12 @@
           },
           "proxy_url": {
             "type": "string"
+          },
+          "skip_tls_verification": {
+            "default": false,
+            "deprecated": true,
+            "description": "Historical environment field; omitted means false and old records remain readable. New format-3 runs use separately approved network profiles, not this field. Does not relax model HTTPS, SSH host checks, Docker daemon/pulls or original Dockerfile/verifier.",
+            "type": "boolean"
           },
           "tools": {
             "additionalProperties": {
@@ -339,6 +415,30 @@
         "required": [
           "name",
           "type"
+        ],
+        "type": "object"
+      },
+      "EnvironmentNetworks": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_profile_id": {
+            "type": "string"
+          },
+          "build_profile_id": {
+            "type": "string"
+          },
+          "source_profile_id": {
+            "type": "string"
+          },
+          "verifier_profile_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_profile_id",
+          "build_profile_id",
+          "agent_profile_id",
+          "verifier_profile_id"
         ],
         "type": "object"
       },
@@ -423,6 +523,16 @@
           },
           "docker_gateway": {
             "type": "string"
+          },
+          "docker_network": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DockerNetworkObservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "environment_id": {
             "type": "string"
@@ -589,6 +699,319 @@
         ],
         "type": "object"
       },
+      "NetworkCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "ca_sha256": {
+            "type": "string"
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "observed_at": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "profile_revision": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "target_url": {
+            "type": "string"
+          },
+          "tls_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "profile_id",
+          "profile_revision",
+          "target_url",
+          "reachable",
+          "observed_at",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "NetworkCheckInput": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm_tls_risk": {
+            "type": "boolean"
+          },
+          "profile_revision": {
+            "type": "string"
+          },
+          "target_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_revision",
+          "target_url"
+        ],
+        "type": "object"
+      },
+      "NetworkMirrors": {
+        "additionalProperties": false,
+        "properties": {
+          "apt": {
+            "$ref": "#/components/schemas/NetworkSource"
+          },
+          "node": {
+            "$ref": "#/components/schemas/NetworkSource"
+          },
+          "npm": {
+            "$ref": "#/components/schemas/NetworkSource"
+          },
+          "pypi": {
+            "$ref": "#/components/schemas/NetworkSource"
+          },
+          "uv": {
+            "$ref": "#/components/schemas/NetworkSource"
+          },
+          "uv_python": {
+            "$ref": "#/components/schemas/NetworkSource"
+          }
+        },
+        "required": [
+          "apt",
+          "pypi",
+          "npm",
+          "node",
+          "uv",
+          "uv_python"
+        ],
+        "type": "object"
+      },
+      "NetworkProfile": {
+        "additionalProperties": false,
+        "description": "Explicit host-scoped network settings, no inherited proxy/mirror/CA/TLS defaults. Public profile metadata is immutable per revision; proxy credential values are never included. Configuration selection does not prove every connection succeeded.",
+        "properties": {
+          "ca_cert_path": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "credential_revision": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "has_credentials": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "mirrors": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkMirrors"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "no_proxy": {
+            "type": "string"
+          },
+          "proxy_auth": {
+            "enum": [
+              "none",
+              "basic"
+            ],
+            "type": "string"
+          },
+          "proxy_mode": {
+            "enum": [
+              "direct",
+              "proxy"
+            ],
+            "type": "string"
+          },
+          "proxy_targets": {
+            "items": {
+              "enum": [
+                "http",
+                "https",
+                "all"
+              ],
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "proxy_url": {
+            "type": "string"
+          },
+          "relay_mode": {
+            "enum": [
+              "loopback",
+              "docker"
+            ],
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "desktop",
+              "environment"
+            ],
+            "type": "string"
+          },
+          "tls_mode": {
+            "enum": [
+              "verify",
+              "skip"
+            ],
+            "type": "string"
+          },
+          "tls_risk_accepted": {
+            "description": "Server-derived confirmation for this exact saved revision. Every edited skip-mode save requires confirm_tls_risk; start additionally requires independently hash-bound scope confirmation.",
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "trust_mode": {
+            "enum": [
+              "system",
+              "custom"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "scope",
+          "proxy_mode",
+          "tls_mode",
+          "trust_mode",
+          "has_credentials",
+          "tls_risk_accepted",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "NetworkProfileInput": {
+        "additionalProperties": false,
+        "properties": {
+          "clear_credentials": {
+            "type": "boolean"
+          },
+          "confirm_tls_risk": {
+            "type": "boolean"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          },
+          "proxy_password": {
+            "description": "Stored as plaintext only in the permission-restricted local SQLite database; never returned. Omit/null to retain this field. Use clear_credentials to clear active and historical values; this is not cryptographic disk erasure.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "proxy_username": {
+            "description": "Stored as plaintext only in the permission-restricted local SQLite database; never returned. Omit/null to retain this field. Use clear_credentials to clear active and historical values; this is not cryptographic disk erasure.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "type": "object"
+      },
+      "NetworkSnapshot": {
+        "additionalProperties": false,
+        "description": "Frozen public source/build/agent/verifier/model profiles and independent credential revisions included in the format-3 approval hash. No proxy credential values. Original Dockerfile build and verifier checks are not relaxed.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          },
+          "build": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          },
+          "model": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          },
+          "source": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          },
+          "verifier": {
+            "$ref": "#/components/schemas/NetworkProfile"
+          }
+        },
+        "required": [
+          "source",
+          "build",
+          "agent",
+          "verifier",
+          "model"
+        ],
+        "type": "object"
+      },
+      "NetworkSource": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "native",
+              "custom"
+            ],
+            "type": "string"
+          },
+          "sources": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
       "Pricing": {
         "additionalProperties": false,
         "properties": {
@@ -664,6 +1087,9 @@
           },
           "name": {
             "type": "string"
+          },
+          "network_profile_id": {
+            "type": "string"
           }
         },
         "required": [
@@ -694,6 +1120,16 @@
           },
           "name": {
             "type": "string"
+          },
+          "network_profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1073,6 +1509,16 @@
           "model": {
             "$ref": "#/components/schemas/Model"
           },
+          "network": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NetworkSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "preflight_tools": {
             "items": {
               "$ref": "#/components/schemas/ToolStatus"
@@ -1253,13 +1699,24 @@
         "type": "object"
       },
       "StartInput": {
+        "additionalProperties": false,
         "properties": {
+          "config_hash": {
+            "type": "string"
+          },
+          "confirm_execution_tls_risk": {
+            "type": "boolean"
+          },
+          "confirm_model_tls_risk": {
+            "type": "boolean"
+          },
           "confirm_paid": {
             "type": "boolean"
           }
         },
         "required": [
-          "confirm_paid"
+          "confirm_paid",
+          "config_hash"
         ],
         "type": "object"
       },
@@ -1484,7 +1941,7 @@
     }
   },
   "info": {
-    "description": "Loopback-only read-only results; authenticated Desktop control. Provider keys are write-only and intentionally stored as plaintext in the user's private SQLite database. One explicit task and no implicit paid reruns.",
+    "description": "Loopback-only read-only results; authenticated Desktop control and explicit host-scoped network configuration. Provider and proxy credentials are write-only plaintext in the user's permission-restricted SQLite database. Format-3 approval freezes network revisions without secrets. Separate TLS-scope confirmations do not replace hash-bound paid start approval. One explicit task and no implicit paid reruns.",
     "title": "Router Forge local backend",
     "version": "0.1.0"
   },
@@ -1865,6 +2322,160 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Model"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/network-profiles": {
+      "get": {
+        "operationId": "listNetworkProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NetworkProfile"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "saveNetworkProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkProfileInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkProfile"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/network-profiles/{id}/check": {
+      "post": {
+        "operationId": "checkNetworkProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkCheckInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkCheck"
                 }
               }
             },

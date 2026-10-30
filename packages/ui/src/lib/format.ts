@@ -4,6 +4,10 @@ export function missingObservation(state: string): string {
   return state === "draft" || activeRunStates.has(state) ? "尚未观测" : "未记录";
 }
 
+export function harborTLSPolicyLabel(skipTLSVerification: boolean | undefined): string {
+  return skipTLSVerification === true ? "跳过 Harbor TLS 验证（不安全）" : "严格验证 Harbor TLS（默认）";
+}
+
 export function runtimeToolVersion(runtime: RuntimeSnapshot | null | undefined, name: string, missing: string): string {
   const tool = runtime?.tools?.find(tool => tool.name === name);
   return safeMessage(tool?.version?.trim() || tool?.version_output?.trim() || missing);

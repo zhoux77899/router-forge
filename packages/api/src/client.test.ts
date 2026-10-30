@@ -30,8 +30,8 @@ describe("typed local API transport", () => {
   test("start requires explicit native confirmation", async () => {
     let data = "";
     const client = new APIClient("", "", async (_method, _path, body) => { data = body; return { status: 200, body: "{}" }; });
-    await client.startRun("run_1", false);
-    expect(JSON.parse(data)).toEqual({ confirm_paid: false });
+    await client.startRun("run_1", { confirm_paid: false, config_hash: "approved-draft-hash", confirm_execution_tls_risk: false, confirm_model_tls_risk: false });
+    expect(JSON.parse(data)).toEqual({ confirm_paid: false, config_hash: "approved-draft-hash", confirm_execution_tls_risk: false, confirm_model_tls_risk: false });
   });
 
   test("rejects paths outside the local control contract", async () => {

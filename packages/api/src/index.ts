@@ -21,6 +21,15 @@ export type JobEvent = components["schemas"]["JobEvent"];
 export type Attempt = components["schemas"]["Attempt"];
 export type RequestRecord = components["schemas"]["RequestRecord"];
 export type RequestSummary = components["schemas"]["RequestSummary"];
+export type NetworkProfile = components["schemas"]["NetworkProfile"];
+export type NetworkProfileInput = components["schemas"]["NetworkProfileInput"];
+export type NetworkSource = components["schemas"]["NetworkSource"];
+export type NetworkMirrors = components["schemas"]["NetworkMirrors"];
+export type EnvironmentNetworks = components["schemas"]["EnvironmentNetworks"];
+export type NetworkSnapshot = components["schemas"]["NetworkSnapshot"];
+export type NetworkCheck = components["schemas"]["NetworkCheck"];
+export type NetworkCheckInput = components["schemas"]["NetworkCheckInput"];
+export type StartInput = components["schemas"]["StartInput"];
 export type Page<T> = { items: T[]; total: number };
 
 export class APIError extends Error {
@@ -65,6 +74,9 @@ export class APIClient {
   environments() { return this.request<Environment[]>("GET", "/api/environments"); }
   saveEnvironment(input: EnvironmentInput) { return this.request<Environment>("POST", "/api/environments", input); }
   inspectEnvironment(id: string) { return this.request<Inspection>("POST", `/api/environments/${encodeURIComponent(id)}/inspect`, {}); }
+  networkProfiles() { return this.request<NetworkProfile[]>("GET", "/api/network-profiles"); }
+  saveNetworkProfile(input: NetworkProfileInput) { return this.request<NetworkProfile>("POST", "/api/network-profiles", input); }
+  checkNetworkProfile(id: string, input: NetworkCheckInput) { return this.request<NetworkCheck>("POST", `/api/network-profiles/${encodeURIComponent(id)}/check`, input); }
   providers() { return this.request<Provider[]>("GET", "/api/providers"); }
   saveProvider(input: ProviderInput) { return this.request<Provider>("POST", "/api/providers", input); }
   models() { return this.request<Model[]>("GET", "/api/models"); }
@@ -75,7 +87,7 @@ export class APIClient {
   runs(limit = 50, offset = 0) { return this.request<Page<Run>>("GET", `/api/runs?limit=${limit}&offset=${offset}`); }
   run(id: string) { return this.request<Run>("GET", `/api/runs/${encodeURIComponent(id)}`); }
   createRun(input: RunSpec) { return this.request<Run>("POST", "/api/runs", input); }
-  startRun(id: string, confirmPaid: boolean) { return this.request<Run>("POST", `/api/runs/${encodeURIComponent(id)}/start`, { confirm_paid: confirmPaid }); }
+  startRun(id: string, input: StartInput) { return this.request<Run>("POST", `/api/runs/${encodeURIComponent(id)}/start`, input); }
   cancelRun(id: string) { return this.request<Run>("POST", `/api/runs/${encodeURIComponent(id)}/cancel`, {}); }
   events(id: string, after = 0) { return this.request<JobEvent[]>("GET", `/api/runs/${encodeURIComponent(id)}/events?after=${after}`); }
   requests(runID?: string, limit = 100, offset = 0) {

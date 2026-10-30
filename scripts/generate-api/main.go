@@ -24,6 +24,14 @@ func shape(t reflect.Type) schema {
 	if t.Name() == "Protocol" {
 		return schema{"type": "string", "enum": []string{string(domain.ChatCompletions), string(domain.Responses), string(domain.AnthropicMessages)}}
 	}
+	if values, ok := map[string][]string{
+		"NetworkScope": {"desktop", "environment"}, "NetworkRoute": {"direct", "proxy"},
+		"NetworkTLSMode": {"verify", "skip"}, "NetworkTrustMode": {"system", "custom"},
+		"NetworkSourceMode": {"native", "custom"}, "NetworkProxyAuth": {"none", "basic"},
+		"NetworkRelayMode": {"loopback", "docker"},
+	}[t.Name()]; ok {
+		return schema{"type": "string", "enum": values}
+	}
 	if t.Kind() == reflect.Struct {
 		return ref(t.Name())
 	}
@@ -68,6 +76,9 @@ func main() {
 		reflect.TypeFor[domain.Suite](), reflect.TypeFor[domain.BenchmarkTask](), reflect.TypeFor[domain.ResolvedBenchmark](), reflect.TypeFor[domain.RunSpec](), reflect.TypeFor[domain.RunSnapshot](), reflect.TypeFor[domain.RuntimeSnapshot](), reflect.TypeFor[domain.ExecutionObservation](),
 		reflect.TypeFor[domain.Run](), reflect.TypeFor[domain.Task](), reflect.TypeFor[domain.Attempt](), reflect.TypeFor[domain.JobEvent](),
 		reflect.TypeFor[domain.Usage](), reflect.TypeFor[domain.RequestRecord](), reflect.TypeFor[domain.CurrencyTotal](), reflect.TypeFor[domain.RequestSummary](),
+		reflect.TypeFor[domain.NetworkProfile](), reflect.TypeFor[domain.NetworkProfileInput](), reflect.TypeFor[domain.NetworkSource](), reflect.TypeFor[domain.NetworkMirrors](),
+		reflect.TypeFor[domain.EnvironmentNetworks](), reflect.TypeFor[domain.NetworkSnapshot](), reflect.TypeFor[domain.NetworkCheck](), reflect.TypeFor[domain.NetworkCheckInput](),
+		reflect.TypeFor[domain.DockerNetworkObservation](), reflect.TypeFor[domain.StartInput](),
 	}
 	schemas := schema{}
 	for _, t := range types {
@@ -78,6 +89,15 @@ func main() {
 	runProperties["agent_version"] = schema{"type": "string", "deprecated": true, "description": "Historical reports only. Omit for new runs: Harbor uses its default container installation and the actual CLI version is independently observed before inference. Nonempty values in new run requests are rejected."}
 	providerInput := schemas["ProviderInput"].(schema)["properties"].(schema)
 	providerInput["api_key"] = schema{"type": []string{"string", "null"}, "writeOnly": true, "description": "Stored as plaintext in the private local SQLite database. Omit/null to retain; empty string clears active and historical credential values. Clearing is not cryptographic disk erasure."}
+	networkInput := schemas["NetworkProfileInput"].(schema)["properties"].(schema)
+	for _, field := range []string{"proxy_username", "proxy_password"} {
+		networkInput[field] = schema{"type": []string{"string", "null"}, "writeOnly": true, "description": "Stored as plaintext only in the permission-restricted local SQLite database; never returned. Omit/null to retain this field. Use clear_credentials to clear active and historical values; this is not cryptographic disk erasure."}
+	}
+	networkProperties := schemas["NetworkProfile"].(schema)["properties"].(schema)
+	networkProperties["proxy_targets"] = schema{"type": "array", "uniqueItems": true, "items": schema{"type": "string", "enum": []string{"http", "https", "all"}}}
+	networkProperties["tls_risk_accepted"] = schema{"type": "boolean", "readOnly": true, "description": "Server-derived confirmation for this exact saved revision. Every edited skip-mode save requires confirm_tls_risk; start additionally requires independently hash-bound scope confirmation."}
+	schemas["NetworkProfile"].(schema)["description"] = "Explicit host-scoped network settings, no inherited proxy/mirror/CA/TLS defaults. Public profile metadata is immutable per revision; proxy credential values are never included. Configuration selection does not prove every connection succeeded."
+	schemas["NetworkSnapshot"].(schema)["description"] = "Frozen public source/build/agent/verifier/model profiles and independent credential revisions included in the format-3 approval hash. No proxy credential values. Original Dockerfile build and verifier checks are not relaxed."
 	for _, name := range []string{"Environment", "Model"} {
 		copy := object(map[string]reflect.Type{"Environment": reflect.TypeFor[domain.Environment](), "Model": reflect.TypeFor[domain.Model]()}[name])
 		r := copy["required"].([]string)
@@ -90,12 +110,16 @@ func main() {
 		copy["required"] = filtered
 		schemas[name+"Input"] = copy
 	}
+	for _, name := range []string{"Environment", "EnvironmentInput"} {
+		properties := schemas[name].(schema)["properties"].(schema)
+		properties["skip_tls_verification"] = schema{"type": "boolean", "default": false, "deprecated": true, "description": "Historical environment field; omitted means false and old records remain readable. New format-3 runs use separately approved network profiles, not this field. Does not relax model HTTPS, SSH host checks, Docker daemon/pulls or original Dockerfile/verifier."}
+		properties["docker_gateway_mode"] = schema{"type": "string", "enum": []string{"detect", "manual"}, "description": "Explicitly opt into detecting the actual Docker bridge or configure docker_host_gateway manually. No address is prefilled."}
+	}
 	for _, name := range []string{"Run", "RequestRecord"} {
 		schemas[name+"Page"] = schema{"type": "object", "required": []string{"items", "total"}, "properties": schema{"items": schema{"type": "array", "items": ref(name)}, "total": schema{"type": "integer"}}}
 	}
 	schemas["Error"] = schema{"type": "object", "required": []string{"error"}, "properties": schema{"error": schema{"type": "string"}}}
 	schemas["Status"] = schema{"type": "object", "required": []string{"version", "pid", "running"}, "properties": schema{"version": schema{"type": "string"}, "pid": schema{"type": "integer"}, "running": schema{"type": "boolean"}}}
-	schemas["StartInput"] = schema{"type": "object", "required": []string{"confirm_paid"}, "properties": schema{"confirm_paid": schema{"type": "boolean"}}}
 
 	paths := schema{}
 	add := func(path, method, id string, input, output schema, admin bool, query []string) {
@@ -132,6 +156,9 @@ func main() {
 	add("/api/environments", "get", "listEnvironments", nil, array("Environment"), true, nil)
 	add("/api/environments", "post", "saveEnvironment", ref("EnvironmentInput"), ref("Environment"), true, nil)
 	add("/api/environments/{id}/inspect", "post", "inspectEnvironment", schema{"type": "object"}, ref("Inspection"), true, nil)
+	add("/api/network-profiles", "get", "listNetworkProfiles", nil, array("NetworkProfile"), true, nil)
+	add("/api/network-profiles", "post", "saveNetworkProfile", ref("NetworkProfileInput"), ref("NetworkProfile"), true, nil)
+	add("/api/network-profiles/{id}/check", "post", "checkNetworkProfile", ref("NetworkCheckInput"), ref("NetworkCheck"), true, nil)
 	add("/api/providers", "get", "listProviders", nil, array("Provider"), true, nil)
 	add("/api/providers", "post", "saveProvider", ref("ProviderInput"), ref("Provider"), true, nil)
 	add("/api/models", "get", "listModels", nil, array("Model"), true, nil)
@@ -147,7 +174,7 @@ func main() {
 	add("/api/runs/{id}/events", "get", "listRunEvents", nil, array("JobEvent"), false, []string{"after"})
 	add("/api/requests", "get", "listRequests", nil, ref("RequestRecordPage"), false, []string{"run_id", "attempt_id", "limit", "offset"})
 
-	spec := schema{"openapi": "3.1.0", "info": schema{"title": "Router Forge local backend", "version": domain.Version, "description": "Loopback-only read-only results; authenticated Desktop control. Provider keys are write-only and intentionally stored as plaintext in the user's private SQLite database. One explicit task and no implicit paid reruns."}, "servers": []any{schema{"url": "http://127.0.0.1:8787"}}, "paths": paths, "components": schema{"schemas": schemas, "securitySchemes": schema{"controlToken": schema{"type": "http", "scheme": "bearer", "description": "Ephemeral local control token delivered by the native Desktop bridge, not a model provider API key."}}}}
+	spec := schema{"openapi": "3.1.0", "info": schema{"title": "Router Forge local backend", "version": domain.Version, "description": "Loopback-only read-only results; authenticated Desktop control and explicit host-scoped network configuration. Provider and proxy credentials are write-only plaintext in the user's permission-restricted SQLite database. Format-3 approval freezes network revisions without secrets. Separate TLS-scope confirmations do not replace hash-bound paid start approval. One explicit task and no implicit paid reruns."}, "servers": []any{schema{"url": "http://127.0.0.1:8787"}}, "paths": paths, "components": schema{"schemas": schemas, "securitySchemes": schema{"controlToken": schema{"type": "http", "scheme": "bearer", "description": "Ephemeral local control token delivered by the native Desktop bridge, not a model provider API key."}}}}
 	b, err := json.MarshalIndent(spec, "", "  ")
 	if err != nil {
 		panic(err)
