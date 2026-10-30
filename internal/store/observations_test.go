@@ -22,6 +22,18 @@ func observedRunFixture(t *testing.T, s *Store) (domain.Run, []domain.ExecutionO
 	snapshot.FormatVersion, snapshot.RegistryKind, snapshot.ResolvedAt = domain.SnapshotFormatVersion, "json", domain.Now()
 	resolved := domain.ResolvedBenchmark{Suite: snapshot.Suite, RegistryKind: snapshot.RegistryKind, ResolvedAt: snapshot.ResolvedAt, Tasks: snapshot.ResolvedTasks}
 	snapshot.ResolutionHash, _ = resolved.Hash()
+	execution, err := s.SaveNetworkProfile(ctx, domain.NetworkProfileInput{Profile: storeNetworkFixture(domain.NetworkEnvironment, snapshot.Environment.ID)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelNetwork, err := s.SaveNetworkProfile(ctx, domain.NetworkProfileInput{Profile: storeNetworkFixture(domain.NetworkDesktop, "")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Network = &domain.NetworkSnapshot{Source: execution, Build: execution, Agent: execution, Verifier: execution, Model: modelNetwork}
+	snapshot.Environment.Networks = &domain.EnvironmentNetworks{SourceProfileID: execution.ID, BuildProfileID: execution.ID, AgentProfileID: execution.ID, VerifierProfileID: execution.ID}
+	snapshot.Environment.DockerGatewayMode = "detect"
+	snapshot.Provider.NetworkProfileID = modelNetwork.ID
 	snapshot.ConfigHash, _ = snapshot.ApprovalHash()
 	data, _ := json.Marshal(snapshot)
 	if _, err := s.DB.ExecContext(ctx, "UPDATE evaluation_runs SET snapshot_json=? WHERE id=?", string(data), run.ID); err != nil {

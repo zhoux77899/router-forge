@@ -36,9 +36,6 @@ func (s *Store) SaveEnvironment(ctx context.Context, e domain.Environment) (doma
 		if e.User != "" && !regexp.MustCompile(`^[A-Za-z0-9_.-]+$`).MatchString(e.User) {
 			return e, fmt.Errorf("invalid SSH user")
 		}
-		if e.Port == 0 {
-			e.Port = 22
-		}
 		if e.Port < 1 || e.Port > 65535 {
 			return e, fmt.Errorf("invalid SSH port")
 		}
@@ -59,6 +56,27 @@ func (s *Store) SaveEnvironment(ctx context.Context, e domain.Environment) (doma
 	if e.Tools == nil {
 		e.Tools = map[string]string{}
 	}
+	if e.DockerGatewayMode != "" && e.DockerGatewayMode != "detect" && e.DockerGatewayMode != "manual" {
+		return e, fmt.Errorf("invalid Docker gateway mode")
+	}
+	if e.DockerGatewayMode == "manual" && strings.TrimSpace(e.DockerHostGateway) == "" {
+		return e, fmt.Errorf("manual Docker gateway requires an explicit address")
+	}
+	if e.Networks != nil {
+		for _, id := range []string{e.Networks.SourceProfileID, e.Networks.BuildProfileID, e.Networks.AgentProfileID, e.Networks.VerifierProfileID} {
+			if id == "" {
+				continue
+			}
+			profile, err := s.NetworkProfile(ctx, id)
+			if err != nil {
+				return e, err
+			}
+			if profile.Scope != domain.NetworkEnvironment || profile.EnvironmentID != e.ID {
+				return e, fmt.Errorf("network profile must target this execution host")
+			}
+		}
+	}
+	e.NetworkRuntime = nil
 	b, err := json.Marshal(e)
 	if err != nil {
 		return e, err
@@ -97,16 +115,17 @@ func (s *Store) Environments(ctx context.Context) ([]domain.Environment, error) 
 }
 
 type providerRow struct {
-	ID           string         `db:"id"`
-	Name         string         `db:"name"`
-	BaseURL      string         `db:"base_url"`
-	CredentialID sql.NullString `db:"credential_id"`
-	CreatedAt    string         `db:"created_at"`
-	APIKey       sql.NullString `db:"api_key"`
+	ID               string         `db:"id"`
+	Name             string         `db:"name"`
+	BaseURL          string         `db:"base_url"`
+	CredentialID     sql.NullString `db:"credential_id"`
+	CreatedAt        string         `db:"created_at"`
+	APIKey           sql.NullString `db:"api_key"`
+	NetworkProfileID string         `db:"network_profile_id"`
 }
 
 func (r providerRow) public() domain.Provider {
-	p := domain.Provider{ID: r.ID, Name: r.Name, BaseURL: r.BaseURL, CreatedAt: r.CreatedAt, HasKey: r.APIKey.Valid && r.APIKey.String != ""}
+	p := domain.Provider{ID: r.ID, Name: r.Name, BaseURL: r.BaseURL, CreatedAt: r.CreatedAt, HasKey: r.APIKey.Valid && r.APIKey.String != "", NetworkProfileID: r.NetworkProfileID}
 	if p.HasKey {
 		p.KeyHint = "••••"
 		p.KeyRevision = r.CredentialID.String
@@ -114,7 +133,7 @@ func (r providerRow) public() domain.Provider {
 	return p
 }
 
-const providerSelect = `SELECT p.id,p.name,p.base_url,p.credential_id,p.created_at,c.api_key FROM providers p LEFT JOIN provider_credentials c ON c.id=p.credential_id`
+const providerSelect = `SELECT p.id,p.name,p.base_url,p.credential_id,p.created_at,p.network_profile_id,c.api_key FROM providers p LEFT JOIN provider_credentials c ON c.id=p.credential_id`
 
 func (s *Store) SaveProvider(ctx context.Context, in domain.ProviderInput) (domain.Provider, error) {
 	var p domain.Provider
@@ -131,7 +150,7 @@ func (s *Store) SaveProvider(ctx context.Context, in domain.ProviderInput) (doma
 	if in.APIKey != nil && (len(*in.APIKey) > 16384 || strings.ContainsAny(*in.APIKey, "\r\n\x00")) {
 		return p, fmt.Errorf("invalid API key")
 	}
-	var credentialID string
+	var credentialID, networkProfileID string
 	created := domain.Now()
 	id := in.ID
 	if id == "" {
@@ -143,13 +162,26 @@ func (s *Store) SaveProvider(ctx context.Context, in domain.ProviderInput) (doma
 		}
 		created = old.CreatedAt
 		credentialID = old.KeyRevision
+		networkProfileID = old.NetworkProfileID
+	}
+	if in.NetworkProfileID != nil {
+		networkProfileID = *in.NetworkProfileID
+		if networkProfileID != "" {
+			profile, err := s.NetworkProfile(ctx, networkProfileID)
+			if err != nil {
+				return p, err
+			}
+			if profile.Scope != domain.NetworkDesktop {
+				return p, fmt.Errorf("provider network must target the Desktop host")
+			}
+		}
 	}
 	tx, err := s.DB.BeginTxx(ctx, nil)
 	if err != nil {
 		return p, err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO providers(id,name,base_url,credential_id,created_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,base_url=excluded.base_url`, id, in.Name, strings.TrimRight(in.BaseURL, "/"), nil, created)
+	_, err = tx.ExecContext(ctx, `INSERT INTO providers(id,name,base_url,credential_id,created_at,network_profile_id) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,base_url=excluded.base_url,network_profile_id=excluded.network_profile_id`, id, in.Name, strings.TrimRight(in.BaseURL, "/"), nil, created, networkProfileID)
 	if err != nil {
 		return p, err
 	}

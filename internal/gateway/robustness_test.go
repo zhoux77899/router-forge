@@ -134,9 +134,10 @@ func TestKnownIntegerCostAndRegistrationPricingSnapshotRemainExact(t *testing.T)
 func TestFinalizationContextIsFreshAndBounded(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, `{"choices":[]}`) }))
 	defer upstream.Close()
-	lease := gateway.Lease{Token: "deadline-token", RunID: "run", TaskID: "task", AttemptID: "attempt", Provider: domain.Provider{ID: "provider", BaseURL: upstream.URL}, Model: domain.Model{ID: "model", ProviderID: "provider", Name: "fixed-model", Protocol: domain.ChatCompletions}, APIKey: "deadline-desktop-key", MaxRequests: 1, MaxOutputTokens: 1, Timeout: time.Second}
+	lease := gateway.Lease{Token: "deadline-token", RunID: "run", TaskID: "task", AttemptID: "attempt", Provider: domain.Provider{ID: "provider", BaseURL: upstream.URL}, Model: domain.Model{ID: "model", ProviderID: "provider", Name: "fixed-model", Protocol: domain.ChatCompletions}, APIKey: "deadline-desktop-key", Network: desktopNetwork(), MaxRequests: 1, MaxOutputTokens: 1, Timeout: time.Second}
 	ledger := &deadlineLedger{}
 	g := gateway.New(ledger)
+	t.Cleanup(func() { _ = g.Close() })
 	if _, err := g.Register(lease); err != nil {
 		t.Fatal(err)
 	}

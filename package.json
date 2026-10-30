@@ -11,7 +11,7 @@
     "lint:commit": "node .githooks/check-commit-message.mjs",
     "dev:desktop": "bun run --filter @router-forge/desktop dev",
     "dev:web": "bun run --filter @router-forge/web dev",
-    "generate:api": "openapi-typescript packages/api/openapi.json -o packages/api/src/schema.generated.ts",
+    "generate:api": "openapi-typescript packages/api/openapi.json -o packages/api/src/schema.generated.ts --default-non-nullable false",
     "generate:contracts": "go run ./scripts/generate-api && bun run generate:api",
     "typecheck": "bun run --workspaces --if-present typecheck",
     "test": "bun test",

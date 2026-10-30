@@ -18,8 +18,9 @@ func pricedFixture(t *testing.T, protocol domain.Protocol, pricing *domain.Prici
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, payload) }))
 	t.Cleanup(upstream.Close)
 	ledger := &memoryLedger{}
-	lease := gateway.Lease{Token: "priced-attempt", RunID: "run-priced", TaskID: "task-priced", AttemptID: "attempt-priced", Provider: domain.Provider{ID: "priced-provider", BaseURL: upstream.URL}, Model: domain.Model{ID: "priced-model", ProviderID: "priced-provider", Name: "fixed-model", Protocol: protocol, Pricing: pricing}, APIKey: "priced-desktop-key", MaxRequests: 10, MaxOutputTokens: 32, Timeout: time.Second}
+	lease := gateway.Lease{Token: "priced-attempt", RunID: "run-priced", TaskID: "task-priced", AttemptID: "attempt-priced", Provider: domain.Provider{ID: "priced-provider", BaseURL: upstream.URL}, Model: domain.Model{ID: "priced-model", ProviderID: "priced-provider", Name: "fixed-model", Protocol: protocol, Pricing: pricing}, APIKey: "priced-desktop-key", Network: desktopNetwork(), MaxRequests: 10, MaxOutputTokens: 32, Timeout: time.Second}
 	g := gateway.New(ledger)
+	t.Cleanup(func() { _ = g.Close() })
 	if _, err := g.Register(lease); err != nil {
 		t.Fatal(err)
 	}

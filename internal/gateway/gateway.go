@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -37,13 +36,15 @@ type Ledger interface {
 
 // Lease binds a temporary worker credential to one immutable attempt/model.
 type Lease struct {
-	Token                   string
+	Token                   string `json:"-"`
 	RunID                   string
 	TaskID                  string
 	AttemptID               string
 	Provider                domain.Provider
 	Model                   domain.Model
-	APIKey                  string
+	APIKey                  string                  `json:"-"`
+	Network                 *domain.NetworkProfile  `json:"-"`
+	ProxyCredential         *domain.ProxyCredential `json:"-"`
 	MaxRequests             int
 	MaxOutputTokens         int
 	Timeout                 time.Duration
@@ -54,15 +55,16 @@ type Lease struct {
 // Gateway implements the three native inference HTTP protocols without conversion.
 type Gateway struct {
 	ledger Ledger
-	client *http.Client
 	mu     sync.Mutex
 	leases map[string]*leaseState
 	owners map[responseKey]string
 	broken bool
+	closed bool
 }
 
 type leaseState struct {
 	lease         Lease
+	client        *http.Client
 	base          *url.URL
 	names         map[string]bool
 	mu            sync.Mutex
@@ -75,26 +77,15 @@ type leaseState struct {
 
 // New returns a fail-closed gateway backed by the supplied ledger.
 func New(ledger Ledger) *Gateway {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.DisableCompression = true
-	// Fresh HTTP/1 connections avoid stale-connection and HTTP/2 automatic replay.
-	transport.Protocols = new(http.Protocols)
-	transport.Protocols.SetHTTP1(true)
-	if transport.TLSClientConfig == nil {
-		transport.TLSClientConfig = &tls.Config{}
-	}
-	transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
-	transport.DisableKeepAlives = true
-	transport.MaxResponseHeaderBytes = 1 << 20
 	return &Gateway{
 		ledger: ledger,
-		client: &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		leases: make(map[string]*leaseState),
 		owners: make(map[responseKey]string),
 	}
 }
 
-// Register snapshots a validated lease and returns its temporary credential.
+// Register snapshots a validated lease, including its explicit Desktop network
+// profile and private proxy credential, without making an upstream request.
 // An omitted token is generated from 256 bits of cryptographic randomness.
 func (g *Gateway) Register(lease Lease) (string, error) {
 	if lease.RunID == "" || lease.TaskID == "" || lease.AttemptID == "" || lease.Provider.ID == "" || lease.Model.ID == "" || !validModelName(lease.Model.Name) || lease.Model.ProviderID != lease.Provider.ID || !lease.Model.Protocol.Valid() {
@@ -140,15 +131,29 @@ func (g *Gateway) Register(lease Lease) (string, error) {
 		}
 		names[name] = true
 	}
+	client, err := freezeNetwork(&lease)
+	if err != nil {
+		return "", err
+	}
+	registered := false
+	defer func() {
+		if !registered {
+			client.CloseIdleConnections()
+		}
+	}()
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.closed {
+		return "", errors.New("gateway is closed")
+	}
 	if g.broken {
 		return "", errors.New("ledger finalization is unavailable")
 	}
 	if _, exists := g.leases[lease.Token]; exists {
 		return "", errors.New("lease credential already registered")
 	}
-	g.leases[lease.Token] = &leaseState{lease: lease, base: base, names: names, agentObserved: !lease.RequireAgentObservation, active: make(map[string]context.CancelFunc), responses: make(map[string]*responseEntry)}
+	g.leases[lease.Token] = &leaseState{lease: lease, client: client, base: base, names: names, agentObserved: !lease.RequireAgentObservation, active: make(map[string]context.CancelFunc), responses: make(map[string]*responseEntry)}
+	registered = true
 	return lease.Token, nil
 }
 
@@ -177,12 +182,24 @@ func (g *Gateway) Revoke(token string) {
 	if lease == nil {
 		return
 	}
-	lease.mu.Lock()
-	lease.revoked = true
-	for _, cancel := range lease.active {
-		cancel()
+	lease.close()
+}
+
+// Close permanently stops admission, revokes all leases, and releases their
+// private transports. Active requests still finalize their ledger records.
+func (g *Gateway) Close() error {
+	g.mu.Lock()
+	g.closed = true
+	leases := make([]*leaseState, 0, len(g.leases))
+	for token, lease := range g.leases {
+		leases = append(leases, lease)
+		delete(g.leases, token)
 	}
-	lease.mu.Unlock()
+	g.mu.Unlock()
+	for _, lease := range leases {
+		lease.close()
+	}
+	return nil
 }
 
 func validCredential(value string) bool {
@@ -286,9 +303,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(ctx)
 	defer boundRequestIO(ctx, cancel, w, r, deadline)()
 	g.mu.Lock()
-	if g.broken {
+	if g.broken || g.closed {
+		class := "ledger_unavailable"
+		if g.closed {
+			class = "gateway_closed"
+		}
 		g.mu.Unlock()
-		nativeError(w, record.Protocol, http.StatusServiceUnavailable, "ledger_unavailable")
+		nativeError(w, record.Protocol, http.StatusServiceUnavailable, class)
 		return
 	}
 	lease.mu.Lock()
@@ -353,12 +374,17 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			g.deny(w, r, lease, record, started, status, class)
 			return
 		}
+		record.RequestedModel = cleanModelMetadata(record.RequestedModel, lease.lease)
 	}
 
 	g.mu.Lock()
-	if g.broken {
+	if g.broken || g.closed {
+		class := "ledger_unavailable"
+		if g.closed {
+			class = "gateway_closed"
+		}
 		g.mu.Unlock()
-		nativeError(w, record.Protocol, http.StatusServiceUnavailable, "ledger_unavailable")
+		nativeError(w, record.Protocol, http.StatusServiceUnavailable, class)
 		return
 	}
 	lease.mu.Lock()
@@ -448,7 +474,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		upstream.Header.Set("Authorization", "Bearer "+lease.lease.APIKey)
 	}
-	response, err := g.client.Do(upstream)
+	response, err := lease.client.Do(upstream)
 	if err != nil {
 		record.State, record.ErrorClass, status = transportFailure(ctx)
 		record.HTTPStatus = &status
@@ -687,11 +713,7 @@ func (g *Gateway) end(record domain.RequestRecord) bool {
 		}
 		g.mu.Unlock()
 		for _, lease := range leases {
-			lease.mu.Lock()
-			for _, cancel := range lease.active {
-				cancel()
-			}
-			lease.mu.Unlock()
+			lease.close()
 		}
 		return false
 	}
@@ -740,7 +762,7 @@ func nativeError(w http.ResponseWriter, protocol domain.Protocol, status int, cl
 }
 
 func cleanMetadata(value string, lease Lease) string {
-	if !safeIdentifier(value, 256) || strings.Contains(value, lease.Token) || strings.Contains(value, lease.APIKey) {
+	if !safeIdentifier(value, 256) || containsLeaseSecret(value, lease, false) {
 		return ""
 	}
 	return value
@@ -759,7 +781,7 @@ func validModelName(value string) bool {
 }
 
 func cleanModelMetadata(value string, lease Lease) string {
-	if !validModelName(value) || strings.Contains(value, lease.Token) || strings.Contains(value, lease.APIKey) {
+	if !validModelName(value) || containsLeaseSecret(value, lease, false) {
 		return ""
 	}
 	return value
@@ -791,7 +813,7 @@ func copyRequestHeaders(destination, source http.Header, lease Lease) {
 			continue
 		}
 		for _, value := range values {
-			if strings.Contains(value, lease.Token) || strings.Contains(value, lease.APIKey) {
+			if containsLeaseSecret(value, lease, false) {
 				continue
 			}
 			destination.Add(key, value)
@@ -808,8 +830,7 @@ func nativeRequestHeader(key string) bool {
 }
 
 func secretHeaderName(key string, lease Lease) bool {
-	key = strings.ToLower(key)
-	return strings.Contains(key, strings.ToLower(lease.Token)) || strings.Contains(key, strings.ToLower(lease.APIKey))
+	return containsLeaseSecret(key, lease, true)
 }
 
 func copyResponseHeaders(destination, source http.Header, lease Lease) {
@@ -820,7 +841,7 @@ func copyResponseHeaders(destination, source http.Header, lease Lease) {
 			continue
 		}
 		for _, value := range values {
-			if strings.Contains(value, lease.Token) || strings.Contains(value, lease.APIKey) {
+			if containsLeaseSecret(value, lease, false) {
 				continue
 			}
 			destination.Add(key, value)

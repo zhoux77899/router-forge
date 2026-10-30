@@ -150,7 +150,8 @@ func TestResolvePathsForBundledAndWorkspaceAssets(t *testing.T) {
 		webDir    []string
 	}{
 		{"bundle", []string{"server"}, []string{"dist"}},
-		{"workspace", []string{"build", "server"}, []string{"apps", "web", "dist"}},
+		{"workspace", []string{"build", "server"}, []string{"build", "dist"}},
+		{"legacy-workspace", []string{"build", "server"}, []string{"apps", "web", "dist"}},
 		{"custom-web", []string{"server"}, []string{"web"}},
 	} {
 		t.Run(layout.name, func(t *testing.T) {

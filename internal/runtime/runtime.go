@@ -197,7 +197,7 @@ func ResolvePaths(startDir string) Options {
 			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 				base := filepath.Dir(filepath.Dir(candidate))
 				web := ""
-				for _, candidate := range []string{filepath.Join(root, "web"), filepath.Join(root, "dist"), filepath.Join(root, "apps", "web", "dist")} {
+				for _, candidate := range []string{filepath.Join(root, "web"), filepath.Join(root, "dist"), filepath.Join(base, "dist"), filepath.Join(root, "apps", "web", "dist")} {
 					if stat, err := os.Stat(candidate); err == nil && stat.IsDir() {
 						web = candidate
 						break

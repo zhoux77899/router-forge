@@ -82,6 +82,63 @@ func TestRevocationAndClientCancellationCancelEveryActiveCallAndFinalize(t *test
 	}
 }
 
+func TestGatewayCloseCancelsAllLeasesAndPreventsNewAdmission(t *testing.T) {
+	started, upstreamCanceled, finished := make(chan struct{}, 2), make(chan struct{}, 2), make(chan struct{}, 2)
+	g, ledger, first := fixture(t, domain.ChatCompletions, func(_ http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		started <- struct{}{}
+		<-r.Context().Done()
+		upstreamCanceled <- struct{}{}
+	})
+	second := first
+	second.Token, second.AttemptID = "second-close-lease", "second-close-attempt"
+	if _, err := g.Register(second); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{first.Token, second.Token} {
+		go func(token string) {
+			r := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"fixed-model"}`))
+			r.Header.Set("Authorization", "Bearer "+token)
+			g.ServeHTTP(httptest.NewRecorder(), r)
+			finished <- struct{}{}
+		}(token)
+	}
+	wait := func(signal <-chan struct{}) {
+		t.Helper()
+		select {
+		case <-signal:
+		case <-time.After(2 * time.Second):
+			t.Fatal("gateway close did not bound every active model request")
+		}
+	}
+	wait(started)
+	wait(started)
+	if err := g.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		wait(finished)
+		wait(upstreamCanceled)
+	}
+	if len(ledger.records()) != 2 {
+		t.Fatal("closing the gateway lost terminal model request rows")
+	}
+	for _, row := range ledger.records() {
+		if row.State != "canceled" || row.FinishedAt == nil {
+			t.Fatal("gateway close changed request cancellation accounting")
+		}
+	}
+	for _, token := range []string{first.Token, second.Token} {
+		if response := request(t, g, token, "POST", "/v1/chat/completions", `{"model":"fixed-model"}`); response.Code != http.StatusUnauthorized {
+			t.Fatal("closed gateway still authorized a model lease")
+		}
+	}
+	second.Token = "post-close-lease"
+	if _, err := g.Register(second); err == nil {
+		t.Fatal("closed gateway admitted a new model profile")
+	}
+}
+
 func TestLeaseTimeoutFinalizesWithFreshBoundedContext(t *testing.T) {
 	g, ledger, lease := fixture(t, domain.AnthropicMessages, func(w http.ResponseWriter, r *http.Request) { _, _ = io.Copy(io.Discard, r.Body); <-r.Context().Done() }, func(lease *gateway.Lease) { lease.Timeout = 40 * time.Millisecond })
 	w := request(t, g, lease.Token, "POST", "/v1/messages", `{"model":"fixed-model","max_tokens":1}`)

@@ -17,7 +17,8 @@ func TestReadOnlyNativeWSLInspection(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	inspection, err := newNativeWorker(nil).Inspect(ctx, domain.Environment{ID: "wsl-readonly", Type: "wsl", Distribution: "Ubuntu"})
+	environment := selectedNativeSourceFixture(t, domain.Environment{ID: "wsl-readonly", Type: "wsl", Distribution: "Ubuntu"})
+	inspection, err := newNativeWorker(nil).Inspect(ctx, environment)
 	if err != nil {
 		t.Fatal(err)
 	}

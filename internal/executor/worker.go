@@ -21,6 +21,10 @@ type WorkerBackend interface {
 	Execute(context.Context, domain.Environment, domain.ExecutionSpec, func(domain.WorkerEvent), func(domain.ExecutionObservation) error) (domain.ExecutionResult, error)
 }
 
+type networkCheckBackend interface {
+	CheckNetwork(context.Context, domain.Environment, domain.NetworkOperation) (domain.NetworkCheck, error)
+}
+
 type workerRoundTripper struct{ conn *http2.ClientConn }
 
 func (t workerRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -167,6 +171,10 @@ func ServeWorker(ctx context.Context, input io.ReadCloser, output io.WriteCloser
 			defer jobs.Done()
 			defer stop()
 			reply := commandReply{ID: command.ID}
+			command.Environment.NetworkRuntime = command.NetworkRuntime
+			if command.Kind == "execute" && command.Spec != nil {
+				command.Environment.NetworkRuntime = command.Spec.Networks
+			}
 			var callErr error
 			switch command.Kind {
 			case "inspect":
@@ -185,12 +193,21 @@ func ServeWorker(ctx context.Context, input io.ReadCloser, output io.WriteCloser
 						reply.Resolved = &value
 					}
 				}
+			case "check-network":
+				checker, ok := backend.(networkCheckBackend)
+				if !ok || command.NetworkOperation == nil {
+					callErr = errors.New("worker network check capability or operation is unavailable")
+				} else {
+					value, err := checker.CheckNetwork(commandCtx, command.Environment, *command.NetworkOperation)
+					reply.NetworkCheck = &value
+					callErr = err
+				}
 			case "execute":
 				if command.Spec == nil {
 					callErr = errors.New("execution spec is required")
 				} else {
 					emit := func(event domain.WorkerEvent) {
-						event.Message = redactedMessage(event.Message, command.Spec.GatewayToken)
+						event.Message = redactCommandMessage(event.Message, command)
 						if event.Timestamp == "" {
 							event.Timestamp = domain.Now()
 						}
@@ -200,6 +217,7 @@ func ServeWorker(ctx context.Context, input io.ReadCloser, output io.WriteCloser
 						}
 					}
 					observe := func(value domain.ExecutionObservation) error {
+						value = privateObservation(command.Spec, value)
 						if err := value.Validate(); err != nil {
 							return err
 						}
@@ -215,7 +233,7 @@ func ServeWorker(ctx context.Context, input io.ReadCloser, output io.WriteCloser
 					callErr = errors.New("offline fixture backend/spec is unavailable")
 				} else {
 					emit := func(event domain.WorkerEvent) {
-						event.Message = redactedMessage(event.Message, command.Spec.GatewayToken)
+						event.Message = redactCommandMessage(event.Message, command)
 						if event.Timestamp == "" {
 							event.Timestamp = domain.Now()
 						}
@@ -232,11 +250,24 @@ func ServeWorker(ctx context.Context, input io.ReadCloser, output io.WriteCloser
 				callErr = errors.New("unsupported worker command")
 			}
 			if callErr != nil {
-				reply.Error = redactedMessage(callErr.Error(), "")
-				if command.Spec != nil {
-					reply.Error = redactedMessage(reply.Error, command.Spec.GatewayToken)
+				reply.Error = redactCommandMessage(callErr.Error(), command)
+			}
+			redact := func(value string) string { return redactCommandText(value, command) }
+			if reply.Result != nil {
+				*reply.Result = privateExecutionResult(*reply.Result, redact)
+			}
+			if reply.Inspection != nil {
+				*reply.Inspection = privateInspection(*reply.Inspection, redact)
+			}
+			if reply.NetworkCheck != nil {
+				for i, issue := range reply.NetworkCheck.Issues {
+					reply.NetworkCheck.Issues[i] = redactCommandMessage(issue, command)
 				}
 			}
+			command.Environment.NetworkRuntime = nil
+			command.NetworkRuntime = nil
+			command.NetworkOperation = nil
+			command.Spec = nil
 			mu.Lock()
 			delete(active, command.ID)
 			delete(executions, command.ID)

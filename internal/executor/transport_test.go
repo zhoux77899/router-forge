@@ -76,6 +76,10 @@ func (f fixtureBackend) Execute(ctx context.Context, e domain.Environment, s dom
 func transportFixtureSpec(env domain.Environment, job, token string) domain.ExecutionSpec {
 	spec := fixtureSpec()
 	spec.JobName, spec.GatewayToken = job, token
+	profiles := fixtureNetworkSnapshot(env.ID)
+	env.Networks = &domain.EnvironmentNetworks{SourceProfileID: profiles.Source.ID, BuildProfileID: profiles.Build.ID, AgentProfileID: profiles.Agent.ID, VerifierProfileID: profiles.Verifier.ID}
+	env.DockerGatewayMode = "detect"
+	spec.Snapshot.Network = &profiles
 	spec.Snapshot.Environment = env
 	spec.Snapshot.Spec.EnvironmentID = env.ID
 	sealFixtureSpec(&spec)

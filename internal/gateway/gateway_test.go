@@ -57,12 +57,13 @@ func fixture(t *testing.T, protocol domain.Protocol, handler http.HandlerFunc, c
 		Token: "attempt-token", RunID: "run-1", TaskID: "task-1", AttemptID: "attempt-1",
 		Provider: domain.Provider{ID: "provider-1", BaseURL: upstream.URL + "/v1"},
 		Model:    domain.Model{ID: "model-1", ProviderID: "provider-1", Name: "fixed-model", Protocol: protocol},
-		APIKey:   "desktop-upstream-secret", MaxRequests: 20, MaxOutputTokens: 32, Timeout: 5 * time.Second,
+		APIKey:   "desktop-upstream-secret", Network: desktopNetwork(), MaxRequests: 20, MaxOutputTokens: 32, Timeout: 5 * time.Second,
 	}
 	for _, change := range configure {
 		change(&lease)
 	}
 	g := gateway.New(ledger)
+	t.Cleanup(func() { _ = g.Close() })
 	if _, err := g.Register(lease); err != nil {
 		t.Fatal(err)
 	}
