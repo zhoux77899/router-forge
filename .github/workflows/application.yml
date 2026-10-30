@@ -60,7 +60,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           ROUTER_FORGE_VERIFY_NATIVE_BUNDLE: '1'
-          ROUTER_FORGE_NATIVE_BUNDLE_DIR: '${{ github.workspace }}\apps\desktop\build\windows-amd64'
+          ROUTER_FORGE_NATIVE_BUNDLE_DIR: '${{ github.workspace }}\build\desktop\windows-amd64'
         run: go test .\apps\desktop\... -count=1 -timeout 120s
       - name: Check contribution tooling
         run: |

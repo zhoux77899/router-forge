@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -78,6 +81,11 @@ func TestBundledConsoleIntegration(t *testing.T) {
 	}))
 	defer provider.Close()
 	key := "fixture-only-native-bundle-key"
+	var initialProfiles []domain.NetworkProfile
+	bundleAPICall(t, first, http.MethodGet, "/api/network-profiles", nil, &initialProfiles)
+	if len(initialProfiles) != 0 {
+		t.Fatal("fresh native storage inferred a network profile")
+	}
 	var savedEnvironment domain.Environment
 	bundleAPICall(t, first, http.MethodPost, "/api/environments", domain.Environment{
 		Name: "Offline bundle fixture", Type: "local", WorkDir: filepath.Join(profile, "executor"),
@@ -93,6 +101,35 @@ func TestBundledConsoleIntegration(t *testing.T) {
 	bundleAPICall(t, first, http.MethodPost, "/api/models", domain.Model{
 		ProviderID: savedProvider.ID, Name: "fixture-model", DisplayName: "Offline fixture", Protocol: domain.ChatCompletions,
 	}, &savedModel)
+
+	var executionProfile domain.NetworkProfile
+	bundleAPICall(t, first, http.MethodPost, "/api/network-profiles", domain.NetworkProfileInput{Profile: domain.NetworkProfile{
+		Name: "Explicit offline host network", Scope: domain.NetworkEnvironment, EnvironmentID: savedEnvironment.ID,
+		ProxyMode: domain.NetworkDirect, TLSMode: domain.NetworkVerifyTLS, TrustMode: domain.NetworkSystemCA,
+		Mirrors: &domain.NetworkMirrors{
+			APT: domain.NetworkSource{Mode: domain.NetworkNative}, PyPI: domain.NetworkSource{Mode: domain.NetworkNative},
+			NPM: domain.NetworkSource{Mode: domain.NetworkNative}, Node: domain.NetworkSource{Mode: domain.NetworkNative},
+			UV: domain.NetworkSource{Mode: domain.NetworkNative}, UVPython: domain.NetworkSource{Mode: domain.NetworkNative},
+		},
+	}}, &executionProfile)
+	proxyUsername, proxyPassword := "fixture-only-native-bundle-proxy-user", "fixture-only-native-bundle-proxy-password"
+	var modelProfile domain.NetworkProfile
+	bundleAPICall(t, first, http.MethodPost, "/api/network-profiles", domain.NetworkProfileInput{
+		Profile: domain.NetworkProfile{Name: "Explicit offline model network", Scope: domain.NetworkDesktop,
+			ProxyMode: domain.NetworkProxy, ProxyURL: "http://127.0.0.1:9", ProxyTargets: []string{"https"},
+			ProxyAuth: domain.NetworkBasicAuth, RelayMode: domain.NetworkLoopback,
+			TLSMode: domain.NetworkVerifyTLS, TrustMode: domain.NetworkSystemCA},
+		ProxyUsername: &proxyUsername, ProxyPassword: &proxyPassword,
+	}, &modelProfile)
+	if !modelProfile.HasCredentials || modelProfile.CredentialRevision == "" || executionProfile.Revision == "" {
+		t.Fatal("native network revisions or write-only credential metadata were not persisted")
+	}
+	savedEnvironment.DockerGatewayMode = "detect"
+	savedEnvironment.Networks = &domain.EnvironmentNetworks{SourceProfileID: executionProfile.ID, BuildProfileID: executionProfile.ID, AgentProfileID: executionProfile.ID, VerifierProfileID: executionProfile.ID}
+	bundleAPICall(t, first, http.MethodPost, "/api/environments", savedEnvironment, &savedEnvironment)
+	bundleAPICall(t, first, http.MethodPost, "/api/providers", domain.ProviderInput{
+		ID: savedProvider.ID, Name: savedProvider.Name, BaseURL: savedProvider.BaseURL, NetworkProfileID: &modelProfile.ID,
+	}, &savedProvider)
 
 	second := newConsole()
 	second.options = func() (backend.Options, error) { return options, nil }
@@ -110,6 +147,12 @@ func TestBundledConsoleIntegration(t *testing.T) {
 	if len(environments) != 1 || environments[0].ID != savedEnvironment.ID || len(providers) != 1 || providers[0].ID != savedProvider.ID || len(models) != 1 || models[0].ID != savedModel.ID {
 		t.Fatal("fixture configuration did not survive native bridge reattachment")
 	}
+	var profiles []domain.NetworkProfile
+	bundleAPICall(t, second, http.MethodGet, "/api/network-profiles", nil, &profiles)
+	if len(profiles) != 2 || environments[0].Networks == nil || *environments[0].Networks != *savedEnvironment.Networks || environments[0].DockerGatewayMode != "detect" || providers[0].NetworkProfileID != modelProfile.ID {
+		t.Fatal("explicit network profiles or host/model bindings did not survive native reattachment")
+	}
+	verifyBundledNetworkChecks(t, second, executionProfile)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := first.Request(ctx, http.MethodGet, "/api/status", ""); err == nil {
@@ -170,6 +213,60 @@ func TestBundledConsoleIntegration(t *testing.T) {
 	}
 }
 
+func verifyBundledNetworkChecks(t *testing.T, console *Console, profile domain.NetworkProfile) {
+	t.Helper()
+	var requests atomic.Int32
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodHead || r.Header.Get("Authorization") != "" {
+			t.Errorf("native host check method=%s authorization_present=%t; expected HEAD without inference credentials", r.Method, r.Header.Get("Authorization") != "")
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer target.Close()
+	check := func(risk bool) domain.NetworkCheck {
+		var result domain.NetworkCheck
+		bundleAPICall(t, console, http.MethodPost, "/api/network-profiles/"+profile.ID+"/check", domain.NetworkCheckInput{
+			ProfileRevision: profile.Revision, TargetURL: target.URL, ConfirmTLSRisk: risk,
+		}, &result)
+		return result
+	}
+	strict := check(false)
+	if strict.Reachable || len(strict.Issues) == 0 || requests.Load() != 0 {
+		t.Fatal("native worker accepted an untrusted server under strict system trust")
+	}
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: target.Certificate().Raw})
+	caPath := filepath.Join(t.TempDir(), "selected-worker-ca.pem")
+	if err := os.WriteFile(caPath, ca, 0600); err != nil {
+		t.Fatal(err)
+	}
+	profile.ID, profile.Revision, profile.CreatedAt = "", "", ""
+	profile.Name, profile.TrustMode, profile.CACertPath = "Explicit native worker CA", domain.NetworkCustomCA, caPath
+	bundleAPICall(t, console, http.MethodPost, "/api/network-profiles", domain.NetworkProfileInput{Profile: profile}, &profile)
+	custom := check(false)
+	digest := sha256.Sum256(ca)
+	if !custom.Reachable || custom.TLSVerified == nil || !*custom.TLSVerified || custom.CASHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatal("native worker did not apply and identify the selected custom CA", custom)
+	}
+	profile.TLSMode, profile.CACertPath = domain.NetworkSkipTLS, filepath.Join(t.TempDir(), "missing-retained-ca.pem")
+	bundleAPICall(t, console, http.MethodPost, "/api/network-profiles", domain.NetworkProfileInput{Profile: profile, ConfirmTLSRisk: true}, &profile)
+	input, _ := json.Marshal(domain.NetworkCheckInput{ProfileRevision: profile.Revision, TargetURL: target.URL})
+	response, err := console.Request(context.Background(), http.MethodPost, "/api/network-profiles/"+profile.ID+"/check", string(input))
+	if err != nil || response.Status != http.StatusBadRequest || requests.Load() != 1 {
+		t.Fatal("saving native TLS risk authorized a distinct check operation")
+	}
+	skipped := check(true)
+	if !skipped.Reachable || skipped.TLSVerified == nil || *skipped.TLSVerified || skipped.CASHA256 != "" {
+		t.Fatal("native worker read an ignored CA or did not honor independently confirmed TLS skip")
+	}
+	profile.TLSMode, profile.CACertPath = domain.NetworkVerifyTLS, caPath
+	bundleAPICall(t, console, http.MethodPost, "/api/network-profiles", domain.NetworkProfileInput{Profile: profile}, &profile)
+	restored := check(false)
+	if !restored.Reachable || restored.TLSVerified == nil || !*restored.TLSVerified || profile.TLSRiskAccepted || restored.CASHA256 != custom.CASHA256 || requests.Load() != 3 {
+		t.Fatal("native worker failed to restore strict custom trust")
+	}
+}
+
 func bundleAPICall(t *testing.T, console *Console, method, path string, input, output any) {
 	t.Helper()
 	body := ""
@@ -188,8 +285,10 @@ func bundleAPICall(t *testing.T, console *Console, method, path string, input, o
 		}
 		t.Fatalf("bundled bridge %s %s: status %d, error %v, diagnostic %s", method, path, response.Status, err, diagnostic)
 	}
-	if strings.Contains(response.Body, console.info.ControlToken) || strings.Contains(response.Body, "fixture-only-native-bundle-key") {
-		t.Fatal("bundled bridge exposed a private credential")
+	for _, secret := range []string{console.info.ControlToken, "fixture-only-native-bundle-key", "fixture-only-native-bundle-proxy-user", "fixture-only-native-bundle-proxy-password"} {
+		if strings.Contains(response.Body, secret) {
+			t.Fatal("bundled bridge exposed a private credential")
+		}
 	}
 	if err := json.Unmarshal([]byte(response.Body), output); err != nil {
 		t.Fatal(err)

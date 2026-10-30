@@ -1,7 +1,8 @@
 import { defineConfig } from "mygo-cli";
 import { join } from "node:path";
 
-const helperRoot = process.env.ROUTER_FORGE_HELPERS_ROOT || join("..", "..", "build");
+const buildRoot = join("..", "..", "build");
+const helperRoot = process.env.ROUTER_FORGE_HELPERS_ROOT || buildRoot;
 
 export default defineConfig({
   name: "Router Forge",
@@ -12,8 +13,8 @@ export default defineConfig({
   devUrl: "http://127.0.0.1:5174",
   devCommand: "bun run prepare:helpers && bun run dev:renderer",
   buildCommand: "bun run build:renderer",
-  frontendDist: "dist",
+  frontendDist: join(buildRoot, "renderer"),
   bindings: "src/mygo.generated.ts",
-  out: "build",
-  resources: [join(helperRoot, "server"), join(helperRoot, "workers"), join("..", "web", "dist")],
+  out: join(buildRoot, "desktop"),
+  resources: [join(helperRoot, "server"), join(helperRoot, "workers"), join(buildRoot, "dist")],
 });

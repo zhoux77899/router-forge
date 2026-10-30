@@ -123,12 +123,26 @@ func (c *Console) Request(ctx context.Context, method, path, body string) (Respo
 	}
 	secrets := []string{info.ControlToken}
 	var input struct {
-		APIKey *string `json:"api_key"`
+		APIKey        *string `json:"api_key"`
+		ProxyUsername *string `json:"proxy_username"`
+		ProxyPassword *string `json:"proxy_password"`
 	}
-	if json.Unmarshal([]byte(body), &input) == nil && input.APIKey != nil {
-		secrets = append(secrets, *input.APIKey)
+	proxySecrets := []string{}
+	if json.Unmarshal([]byte(body), &input) == nil {
+		if input.APIKey != nil && *input.APIKey != "" {
+			secrets = append(secrets, *input.APIKey)
+		}
+		for _, secret := range []*string{input.ProxyUsername, input.ProxyPassword} {
+			if secret != nil && *secret != "" {
+				proxySecrets = append(proxySecrets, *secret)
+			}
+		}
 	}
-	return Response{Status: response.StatusCode, Body: redactResponse(string(data), secrets)}, nil
+	result := redactResponse(string(data), append(append([]string{}, secrets...), proxySecrets...))
+	if strings.HasPrefix(path, "/api/network-profiles") && response.StatusCode >= 200 && response.StatusCode < 300 {
+		result = redactNetworkProfileResponse(string(data), secrets, proxySecrets)
+	}
+	return Response{Status: response.StatusCode, Body: result}, nil
 }
 
 func validateBackendURL(raw string) error {

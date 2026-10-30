@@ -7,8 +7,13 @@ or the local read-only Web dashboard.
 
 ## First-release scope
 
-- MyGo Desktop with React/shadcn, a separate Go backend, and SQLite persistence.
-- Local, WSL and SSH environment profiles, connection checks and tool/agent detection.
+- MyGo Desktop with React/shadcn, neutral black/white light and dark themes,
+  HugeIcons, outline/border focus instead of rings or shadows, a separate Go backend,
+  and SQLite persistence. Layout explains the workflow without redundant labels.
+- Local, WSL and SSH environments, connection checks and tool/agent detection.
+- A separate Network page with explicitly selected, revisioned profiles for source,
+  build, agent, verifier and Desktop model traffic. First use has no selected network
+  modes, addresses, mirrors, CA or TLS policy.
 - Native Chat Completions, Responses and Anthropic Messages forwarding, including
   SSE and tool-call payloads. No protocol conversion, fallback or model substitution.
 - One task from `swe-bench/swe-bench-verified`, resolved by the installed Harbor's
@@ -51,18 +56,21 @@ bun run build:desktop
 ```
 
 `build:desktop` builds Web assets and backend/worker resources before the MyGo
-application. Native application packaging is distinct from a Vite-only preview.
-Keep the executable beside its `server`, `workers` and `dist` resource directories.
+application. All build outputs are under the repository-root `build` directory:
+`dist` for read-only Web assets, `renderer` for the embedded Desktop frontend,
+`server` and `workers` for backend helpers, and `desktop` for native releases.
+Native application packaging is distinct from a Vite-only preview. Keep the
+executable beside its `server`, `workers` and `dist` resource directories.
 On Windows amd64, open the built application from the repository root:
 
 ```powershell
-& ".\apps\desktop\build\windows-amd64\Router Forge.exe"
+& ".\build\desktop\windows-amd64\Router Forge.exe"
 ```
 
 To test without changing your normal backend profile, pass an absolute directory:
 
 ```powershell
-& ".\apps\desktop\build\windows-amd64\Router Forge.exe" --data-dir "$env:LOCALAPPDATA\RouterForge-Test"
+& ".\build\desktop\windows-amd64\Router Forge.exe" --data-dir "$env:LOCALAPPDATA\RouterForge-Test"
 ```
 
 `--data-dir` overrides `ROUTER_FORGE_DATA_DIR` and also places the native renderer's
@@ -72,17 +80,20 @@ default bundle, build into a separate output directory rather than stopping it:
 ```powershell
 bun run build:web
 bun run build:backend
-bun run --cwd .\apps\desktop build -o .\build\verified
+bun run --cwd .\apps\desktop build -o ..\..\build\desktop-verified
 ```
 
-The fresh bundle is under `apps\desktop\build\verified\windows-amd64`; pass that
+The fresh bundle is under `build\desktop-verified\windows-amd64`; pass that
 absolute directory as `ROUTER_FORGE_NATIVE_BUNDLE_DIR` for the opt-in checks. The
 local installer is unsigned; signing and installer acceptance are not covered by
 the offline checks. Do not bypass an OS or browser security warning.
 
 If a corporate proxy needs a private CA, use the organization's trusted CA bundle
-with Bun's `--cafile` option. Keep TLS verification enabled; do not bypass certificate
-errors. Do not commit a CA bundle, proxy credential or local dependency cache.
+with Bun's `--cafile` option. Host build tools must keep TLS verification enabled;
+application Network profiles do not configure Bun or host tooling. Contributor
+registry overrides are per-invocation choices, not product defaults or global
+package configuration. Do not commit a CA bundle, proxy credential or local
+dependency cache.
 
 ### Prepare an execution environment
 
@@ -95,20 +106,24 @@ Harbor uses its default agent installation **inside the task container**; no exa
 agent version is requested. Inference stays blocked until an independent container
 CLI probe has succeeded and its actual version has been durably acknowledged.
 
-| Profile | Configuration and boundary |
+| Environment | Configuration and boundary |
 | --- | --- |
 | Local | The current OS and tool paths. Native Windows is a connection/inspection path; use WSL for the initial Linux-container SWE evaluation. |
-| WSL | A distribution name, a private Linux work directory, tool paths and optional proxy/CA settings. Keep credentials/configs on the Linux filesystem, not an unprotected Windows mount. |
-| SSH | An existing Linux SSH host/config, identity or SSH agent, and known-hosts file. Host-key checks stay enabled; no password prompt or permissive host-key mode is added. Linux amd64/arm64 worker resources are bundled. |
+| WSL | A distribution name, a private Linux work directory and tool paths. Bind Network profiles to this exact environment. Keep execution files/configs on the Linux filesystem, not an unprotected Windows mount. |
+| SSH | An existing Linux SSH host/config, an explicit port, identity or SSH agent, and known-hosts file. Host-key checks stay enabled; no password prompt or permissive host-key mode is added. Linux amd64/arm64 worker resources are bundled. |
 
 The worker relays container requests over its authenticated stdio connection to the
 local backend. It does not publish the control API, require SSH `GatewayPorts`, or
 send the real provider key to the task container. Docker-to-relay connectivity and
-configured CA/proxy reachability must pass preflight. The profile proxy configures
-worker/Harbor processes, not the Docker daemon's image downloader. A healthy daemon
-does not guarantee that its registry/CDN connection can fetch the original task
-image within the build budget. Prepare that unchanged image using the existing
-Docker network configuration when necessary; do not replace it with a tool fixture.
+the bound network profiles must pass preflight; configured custom CA files must be
+usable on the selected host when strict verification requires them.
+
+Explicitly select Docker gateway **detect** or **manual** mode; manual mode requires
+an address. Docker daemon proxy/mirror settings are read-only observations, not
+application-managed configuration. A healthy daemon does not prove registry/CDN
+image access. The application does not reconfigure/restart the daemon or perform a
+network-check image pull. If necessary, prepare only the unchanged original task
+image using the daemon's existing configuration; never substitute a tool fixture.
 
 Cold agent discovery and native registry/Hub resolution can take up to the control
 API's three-minute preflight budget. Resolution uses the installed Harbor package,
@@ -117,24 +132,72 @@ Network, missing-task and capability failures are explicit; there is no old-sour
 fallback or automatic tool upgrade. A timeout or disconnection never authorizes a
 rerun.
 
+### Network profiles
+
+Open the independent **Network** page and select either **Desktop model traffic**
+or one exact saved Windows/WSL/SSH Environment. Nothing is selected on first use;
+Direct, System CA, Strict and Native are choices, not implied defaults. Processes
+do not inherit Proxy/Mirror/CA/TLS policy from host environment variables or legacy
+Environment fields.
+
+| Setting | Explicit choices |
+| --- | --- |
+| Connection | Direct or Proxy; proxy protocol, address, authentication and `no_proxy`. URLs must not contain credentials. |
+| Trust | System or Custom CA on the selected host; Strict or Skip TLS verification. Skip requires its own saved risk acceptance. |
+| Package sources | Each of `apt`, `pypi`, `npm`, `node`, `uv` and `uv_python` independently selects Native or a Custom source. No mirror address is supplied automatically. |
+
+Bind four profiles in Environment: **source**, **build**, **agent** and **verifier**.
+Each binding must target that same environment. Bind the provider's **model** profile
+separately to Desktop; model HTTPS never inherits an execution TLS exception.
+Proxy credential edits independently retain, replace or clear the saved credential;
+see [Data and credentials](#data-and-credentials).
+
+Build supports only strict TLS, system CA, native sources and unauthenticated proxy
+build arguments. Custom CA, mirrors, TLS skip and authenticated relay are rejected
+for Build; the original Dockerfile is not rewritten. Verifier stays strict and
+isolated from Agent policy. Original `test.sh`, solution files and verifier semantics
+are not changed. These profiles do not alter SSH host-key checks, OS trust, Docker
+daemon/image-pull policy or host build tools; TLS skip does not fix proxy **407** or
+Docker **IPAM** address-pool collisions.
+
+Skipping TLS stops server-identity verification: a man-in-the-middle can replace
+metadata, downloads or install scripts. Saving that risk acceptance, checking a
+profile/destination, acknowledging execution/model TLS risk at start and confirming
+paid execution are separate actions. A check sends **HEAD** to the explicitly entered,
+credential-free destination without redirects, a provider API key or inference; it
+never infers a destination. A saved mode, CA path, successful save/read or one check
+is not evidence that every later connection or a Harbor trial succeeded.
+
+Snapshot/hash format **3** freezes the five public profiles and their independent
+credential revisions, never private credential values. Later profile edits do not
+rewrite the draft. Old environments, providers and history remain readable without
+inventing network policies or runtime evidence; old frozen drafts must be recreated.
+See [Desktop documentation](apps/desktop/README.md) for the native workflow.
+
 ## Run one benchmark
 
-1. Open Desktop and save a Local, WSL or SSH profile. Run its connection/tool check
-   and resolve reported readiness issues before creating a run.
-2. Add a provider's HTTPS base URL and key, then a model with its exact wire name,
-   native protocol and optional documented per-million token prices. Loopback HTTP
-   endpoints exist for local mock tests, not remote plaintext providers.
+1. Save a Local, WSL or SSH Environment, explicitly select its Docker gateway mode,
+   configure Network profiles and bind source/build/agent/verifier. Run the selected
+   environment's connection/tool checks and profile/destination checks; resolve
+   readiness issues before creating a run.
+2. Add a provider's HTTPS base URL and write-only key, bind its separate Desktop
+   model Network profile, then add a model with its exact wire name, native protocol
+   and optional documented per-million token prices. Loopback HTTP endpoints exist
+   for local mock tests, not remote plaintext providers.
 3. Resolve `swe-bench/swe-bench-verified` in that environment and select exactly one
    canonical task from the returned catalog. No task is automatically substituted
    or launched. The preview may change; the saved draft is the authoritative source.
 4. Choose a detected, protocol-compatible Harbor agent. Its container installation
    uses Harbor's default policy, not an explicit version. Set setup/agent timeouts,
    a request-count limit and a per-request output-token ceiling.
-5. Create a draft and review its recorded dataset version/digest and exact task
-   commit/digest, model and limits. Starting uses those saved task references without
-   re-resolving the floating dataset. Drafting does **not** authorize inference;
-   starting requires separate confirmation. Downloads and container setup can take
-   time, and model use can incur cost.
+5. Create a draft and review its dataset version/digest, exact task commit/digest,
+   model, limits, five frozen Network profiles and credential revisions. Starting
+   uses those saved references without re-resolving the floating dataset. Drafting
+   does **not** authorize inference: start requires the exact snapshot `config_hash`
+   and `confirm_paid=true`, plus `confirm_execution_tls_risk` and/or
+   `confirm_model_tls_risk` when the corresponding frozen scope skips TLS. These
+   confirmations are independent of saving or checking a profile. Downloads and
+   container setup can take time, and model use can incur cost.
 6. Inspect run progress, request usage/cost and verifier outcome. Cancel affects only
    that owned run. Closing Desktop does not cancel it; reopening reconnects to the
    same backend.
@@ -161,8 +224,10 @@ Missing/partial provider usage or undocumented prices remain unknown, not exact 
 Cost estimates use the approved price source and currency; they are not provider invoices.
 
 The backend URL shown by Desktop serves the built **read-only** Web dashboard on
-loopback. It exposes results, events and request metadata, not configuration controls
-or provider keys. Public deployment and browser-side administration are not supported.
+loopback. Its GET-only facade exposes results, events, request metadata and approved
+public snapshots, not Network management, protected configuration or credentials.
+The native private API remains private. Public deployment and browser-side
+administration are not supported.
 
 For frontend development, Desktop uses `127.0.0.1:5174` and attaches through MyGo.
 The separate `bun run dev:web` server uses `127.0.0.1:5173`; set
@@ -176,17 +241,26 @@ The backend stores its SQLite database, readiness descriptor and private logs un
 Executor jobs and raw Harbor results stay in the configured private execution work
 directory. Back up both locations if you need to retain the original trial artifacts.
 
-**Provider API keys are deliberately stored in plaintext SQLite.** They are not
-vault-backed or encrypted. Directory/database/WAL/SHM permissions restrict ordinary
-access to the current user (and Windows administrators/SYSTEM). These protections do
-not protect against that account being compromised or an administrator reading files.
-Do not sync the profile to a public folder or include it in screenshots, issues or CI.
+**Provider API keys and proxy credentials are deliberately stored in local plaintext
+SQLite.** They are write-only through the UI/API, not vault-backed or encrypted.
+Directory/database/WAL/SHM permissions restrict ordinary access to the current user
+(and Windows administrators/SYSTEM). These protections do not protect against that
+account being compromised or an administrator reading files. Do not sync the profile
+to a public folder or include it in screenshots, issues or CI.
 
 Key updates create private credential revisions so an approved draft cannot silently
 switch keys. Omitting the key field preserves it; explicitly clearing it invalidates
 stored credential references. Clearing is **not** secure physical erasure of SQLite,
 WAL or backups, and does not stop a lease already holding the key in memory; cancel
 an active run explicitly if it must stop using that credential.
+
+Network configuration revisions are immutable; proxy credentials have independent
+revisions. Retain keeps the existing secret, Replace creates a new credential
+revision, and Clear blanks secret values in all old credential revisions and
+invalidates their use. Clear is not cryptographic erasure of SQLite/WAL/backups or
+revocation of credentials already held in memory. Public snapshots contain approved
+profile metadata and revision references, not usernames/passwords; model-profile
+proxy secrets stay on Desktop and are not sent to execution workers.
 
 The request ledger stores metadata and token counts, not raw prompts or generated
 content. Harbor's private artifacts can contain both. Treat those files as sensitive;
@@ -202,6 +276,7 @@ they are not served by the result dashboard or uploaded by CI.
 | `apps/web` | Vite read-only results application. |
 | `internal/domain`, `internal/store` | Shared records, migrations, permissions and request accounting. |
 | `internal/gateway`, `internal/control` | Same-protocol metering and protected orchestration API. |
+| `internal/netpolicy` | Explicit profile-bound transports and isolated proxy handling. |
 | `packages/api`, `packages/ui` | Generated OpenAPI/TypeScript contracts, SDK and shared UI. |
 | `benchmarks/harbor` | Benchmark/adapter fixtures used without paid credentials. |
 | `scripts` | Contract generation and platform resource builds. |
@@ -234,6 +309,12 @@ pull/build the original task image and install dependencies inside that containe
 it does not use paid credentials or produce a real model benchmark score. See
 CONTRIBUTING for both opt-in commands. Native form/close-reopen checks and a
 separately authorized real-provider SWE-bench run remain distinct acceptance steps.
+
+Installed-Harbor strict/skip/restore checks and an exact Hub task download have
+passed separately. The last full real Harbor trial **failed** with
+`worker connection lost`, zero provider requests, no acknowledged agent CLI version
+and no completed verifier. Those checks are not a completed trial; no paid model call
+or successful complete SWE-bench run is claimed.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for targeted validation, lockfile and commit/PR
 rules. Coding agents should read [AGENTS.md](AGENTS.md), which links the shared

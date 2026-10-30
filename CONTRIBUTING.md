@@ -193,6 +193,43 @@ already tracked files or provide secret scanning. Lockfiles, product configurati
 documentation, and benchmark inputs outside ignored harness directories remain
 eligible for version control.
 
+## Network and UI changes
+
+Follow the explicit [Network workflow](apps/desktop/README.md#network-配置), not
+legacy Environment proxy/TLS fields. Keep these boundaries when changing contracts,
+storage, transports or views:
+
+- First use is blank. Direct/Proxy, protocol/authentication, `no_proxy`, System/Custom
+  CA, Strict/Skip and each apt/pypi/npm/node/uv/uv_python Native/Custom source are
+  explicit user choices, never host-environment inheritance or product defaults.
+- Source/build/agent/verifier bindings target one exact Environment; the provider's
+  model profile targets Desktop only. Old records remain readable without assumed
+  policies. Recreate old drafts; do not silently migrate them.
+- Hash format 3 freezes five public profiles and independent credential revisions.
+  Profile revisions are immutable. Private proxy secrets are write-only, stored in
+  restricted local plaintext SQLite, and excluded from public contracts/snapshots.
+  Retain/Replace/Clear are distinct; Clear blanks old revisions, not SQLite/WAL or
+  backup media. Never send model-profile proxy credentials to an execution worker.
+- Saving TLS risk, checking an explicit profile/destination, start-time execution
+  and model TLS acknowledgements, and paid execution confirmation are independent.
+  Start binds the exact `config_hash`, `confirm_paid` and applicable
+  `confirm_execution_tls_risk` / `confirm_model_tls_risk`. A credential-free HEAD
+  check sends no provider key or inference and follows no redirect; configuration,
+  CA paths or a check are not per-connection or trial-success evidence.
+- Build allows only strict/system/native and unauthenticated proxy build args.
+  Reject custom CA, mirrors, TLS skip and authenticated relay rather than modifying
+  the original Dockerfile. Verifier is strict and isolated from Agent; preserve
+  original `test.sh`, solution files and verifier semantics.
+- Docker gateway detect/manual is explicitly selected. Observe daemon proxy/mirror
+  settings read-only; do not reconfigure/restart the daemon or pull an image to
+  check networking. Do not change system trust or shared host package configuration.
+- Use React/shadcn composition, default Neutral black/white light/dark tokens and
+  HugeIcons. No ring/shadow effects, including focus and overlays; retain visible
+  outline/border focus. Remove redundant secondary labels/descriptions, not accessible
+  names, errors, server-identity/MITM disclosure or cost confirmation.
+- Web and shared results have only a GET-only snapshot facade. Do not expose Network
+  management, protected configuration, native control tokens or private credentials.
+
 ## Validation
 
 Run the smallest tests that cover the changed package. The complete offline checks
@@ -227,16 +264,22 @@ the actual Desktop Go bridge without opening a GUI:
 
 ```powershell
 $env:ROUTER_FORGE_VERIFY_NATIVE_BUNDLE = "1"
-$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\apps\desktop\build\windows-amd64").Path
+$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\build\desktop\windows-amd64").Path
 go test .\apps\desktop\... -run TestBundledConsoleIntegration -count=1 -timeout 90s
 Remove-Item Env:\ROUTER_FORGE_VERIFY_NATIVE_BUNDLE
 Remove-Item Env:\ROUTER_FORGE_NATIVE_BUNDLE_DIR
 ```
 
-The test uses a temporary private profile and a loopback-only dummy provider. It
-checks resource resolution, authenticated configuration writes, credential
-redaction, persistence, cancelled request contexts, same-PID reattachment and the
-built read-only Web. It sends no provider request and stops only its own backend.
+The test uses a temporary private profile and a loopback-only dummy provider. Its
+Network fixture now checks the blank initial state, explicit profile save/read and
+exact Environment/Provider bindings; fixture choices are not product defaults. It
+drives the actual bundled host worker with credential-free HEAD requests to an
+owned self-signed TLS server: strict rejection, selected custom CA and its loaded
+SHA-256, separately confirmed TLS skip with an ignored missing CA, and strict
+restoration. It also checks resource resolution, authenticated configuration
+writes, credential redaction, persistence, cancelled request contexts, same-PID
+reattachment and the built read-only Web. It sends no provider request and stops
+only its own backend.
 Application CI enables this check after its Windows Desktop build.
 
 The real WSL Docker relay test is separately opt-in. Set
@@ -254,25 +297,57 @@ fixture image as a SWE-bench task environment.
 
 ### Optional real Harbor trial with a synthetic provider
 
-The stronger Windows/WSL check uses the built backend and actual Desktop Go bridge,
-the installed Harbor and its default OpenCode container installation, and the
-current registry's exact `swe-bench/django__django-13741` task source and original
-verifier. Dataset resolution follows Harbor's native routing; no Harbor/agent
-version or registry/task commit is fixed by the test. Only the external
-model API is synthetic. It requires the existing Ubuntu Docker/Harbor setup and
-can download the original SWE image and container dependencies; it does not install
-host tools or use a real provider key. Allow adequate disk space and setup time.
+Installed-Harbor strict/skip/restore checks and an exact Hub task download passed
+separately. The last full real Harbor trial **failed** with `worker connection lost`,
+zero provider requests, no acknowledged agent CLI version and no completed verifier.
+The format-3 fixture has been migrated to explicit Network inputs and revision-bound
+start confirmations, but **has not been run after migration**. Previous trial
+failure evidence is unchanged; neither the migration nor the command below proves
+a completed trial, paid model call or successful SWE-bench run.
+
+The Windows/WSL fixture uses the built backend and actual Desktop Go bridge, the
+installed Harbor and its default OpenCode container installation, and the current
+registry's exact `swe-bench/django__django-13741` task source and original verifier.
+Dataset resolution follows Harbor's native routing; no Harbor/agent version or
+registry/task commit is pinned. Only the external model API is synthetic. It
+requires the existing Ubuntu Docker/Harbor setup and can download the original SWE
+image and container dependencies; it does not install host tools or use a real
+provider key. Allow adequate disk space and setup time.
+
 On a slow registry/CDN connection, pre-cache only the unchanged image declared by
 the exact resolved task's environment. Its image may change with the current
-registry source; never substitute an image from an old report. Image pulls use the
-daemon's existing network settings; an environment profile's proxy cannot
-reconfigure that daemon. The worker records the actual immutable identity.
-Do not disable TLS, restart/reconfigure shared host services, or substitute TB4's
-network fixture image. Then run the explicitly enabled test:
+registry source; never substitute an image from an old report or TB4's network
+fixture. Image pulls use the daemon's existing network settings, not application
+Network profiles. Do not restart/reconfigure shared services, change daemon TLS or
+use a model TLS exception merely to solve an execution-network problem. The worker
+records the actual immutable image identity.
+
+Before enabling this trial, set these fixture-only inputs explicitly:
+
+| Variable | Input |
+| --- | --- |
+| `ROUTER_FORGE_HARBOR_EXECUTION_NETWORKS` | Windows absolute path to a JSON object with `source`, `build`, `agent` and `verifier`, each a `NetworkProfileInput`. Each nested `profile.scope` is `environment`; `profile.id`, `profile.revision` and `profile.environment_id` are empty until the fixture creates and binds its exact host. |
+| `ROUTER_FORGE_HARBOR_MODEL_NETWORK` | Windows absolute path to one `NetworkProfileInput` JSON object. Its `profile.scope` is `desktop`; `profile.id`, `profile.revision` and `profile.environment_id` are empty. The saved profile is bound only to the synthetic provider. |
+| `ROUTER_FORGE_HARBOR_DOCKER_GATEWAY_MODE` | Explicit `detect` or `manual`; no fallback selection. |
+| `ROUTER_FORGE_HARBOR_DOCKER_GATEWAY` | Explicit address required for `manual` mode. |
+| `ROUTER_FORGE_HARBOR_CONFIRM_EXECUTION_TLS_RISK` | Set to `1` to acknowledge start-time risk when the frozen execution profiles skip TLS. |
+| `ROUTER_FORGE_HARBOR_CONFIRM_MODEL_TLS_RISK` | Independently set to `1` when the frozen Desktop model profile skips TLS. |
+
+Connection/proxy/authentication, `no_proxy`, System/Custom CA, Strict/Skip, all six
+apt/pypi/npm/node/uv/uv_python Native/Custom sources, optional write-only
+`proxy_username` / `proxy_password`, and save-time `confirm_tls_risk` come only from
+the JSON inputs. JSON files live on Windows; any custom CA path inside a profile
+belongs to that profile's selected execution host or Desktop. Keep files containing
+credentials private and out of Git, CI, logs and screenshots. No network modes,
+addresses or mirrors are inferred. The trial no longer reads the legacy
+`ROUTER_FORGE_HARBOR_PROXY`, `ROUTER_FORGE_HARBOR_CA`,
+`ROUTER_FORGE_HARBOR_NO_PROXY` or `ROUTER_FORGE_HARBOR_SKIP_TLS_VERIFICATION` inputs.
+
+After preparing the required inputs, enable the test explicitly:
 
 ```powershell
 $env:ROUTER_FORGE_VERIFY_HARBOR_MOCK = "1"
-$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\apps\desktop\build\windows-amd64").Path
+$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\build\desktop\windows-amd64").Path
 $env:ROUTER_FORGE_HARBOR_DISTRIBUTION = "Ubuntu"
 go test .\apps\desktop\... -run TestWSLHarborMockTrial -count=1 -timeout 50m -v
 Remove-Item Env:\ROUTER_FORGE_VERIFY_HARBOR_MOCK
@@ -280,48 +355,51 @@ Remove-Item Env:\ROUTER_FORGE_NATIVE_BUNDLE_DIR
 Remove-Item Env:\ROUTER_FORGE_HARBOR_DISTRIBUTION
 ```
 
+Restore or unset the fixture-only network inputs after the check.
 `ROUTER_FORGE_HARBOR_TASK` can select another exact canonical task from the same
-resolved dataset; absent that variable, the test requests
-`swe-bench/django__django-13741` and fails explicitly if it is unavailable. It never
-substitutes a task or old registry. The draft records the dataset version/digest
-and task SHA/digest once; starting consumes that saved reference. The report checks
-actual uv/Harbor output and an independently acknowledged container CLI version,
-not an expected version number. Configure an existing trusted CA profile when the
-native registry/Hub client requires it; TLS verification must stay enabled. The
-opt-in test reads `ROUTER_FORGE_HARBOR_CA` as an absolute path in the selected native
-environment, for example Ubuntu's existing `/etc/ssl/certs/ca-certificates.crt`.
-`ROUTER_FORGE_HARBOR_PROXY` optionally sets the fixture's HTTP/HTTPS proxy profile
-for native registry downloads and container setup. `ROUTER_FORGE_HARBOR_NO_PROXY`
-optionally sets its comma-separated direct-route exceptions, without changing the
-resolved source. These options also apply to source-only verification. They do not
-change shared Docker daemon proxy settings or global certificate trust; TLS
-verification stays enabled. The approved CA is passed to native/container Git as
-well as curl, Python and Node clients; no system trust store is modified.
-The proxy must be reachable from both the native host
-and Harbor's task containers. Check Docker's allocated subnets for overlap with
-corporate proxy addresses: a host-only connectivity check can pass before a new
-Compose network shadows the proxy route. Use an approved container-reachable
-proxy endpoint without reconfiguring a shared daemon or replacing the task image.
+resolved dataset; absent that variable, this fixture requests
+`swe-bench/django__django-13741` and fails explicitly if it is unavailable. This is
+fixture input, not a product task default. It never substitutes a task or old
+registry. The draft records the dataset version/digest and task SHA/digest once;
+starting consumes that saved reference. The report requires actual uv/Harbor output
+and an independently acknowledged container CLI version, not an expected version.
+
+Saving `confirm_tls_risk` does not replace either start-time TLS acknowledgement.
+Start sends the actual snapshot `config_hash`, the two independent risk values
+above when applicable, and `confirm_paid=true` only for this synthetic mock fixture;
+it does not authorize or demonstrate a real model call. Build accepts only
+strict/system/native and unauthenticated proxy args; Verifier remains strict and
+isolated from Agent. Do not change the original Dockerfile, `test.sh`, solution,
+verifier semantics, SSH known-hosts, system trust or shared host tooling. Skip does
+not fix proxy 407 or Docker subnet overlap. Saved policy and CA paths are not
+independently observed connection results; unsupported clients fail explicitly.
+
+The proxy must be reachable from both its selected native host and task-container
+traffic. A host-only check can pass before a new Compose subnet shadows the route
+or overlaps a corporate proxy address. Check the selected Docker gateway mode and
+approved container-reachable endpoint without reconfiguring a shared daemon or
+replacing the task image.
 
 For source-only verification on Linux, enable
 `ROUTER_FORGE_VERIFY_NATIVE_SOURCE=1` and run
 `TestInstalledHarborCurrentSourceAndExactMaterialization` in `internal/executor`.
 This test uses the installed Harbor, resolves the current official dataset once,
-and downloads only the exact `ROUTER_FORGE_HARBOR_TASK` (the same default as above).
-It records the actual source, native task/trial identities and original metadata
-hash without Docker or model requests. `ROUTER_FORGE_NATIVE_SOURCE_EVIDENCE`
-optionally saves redacted JSON at an absolute path. A missing task, registry/network
-failure or unavailable native API is an explicit failure, not a cache fallback.
+and downloads only the exact `ROUTER_FORGE_HARBOR_TASK` (the fixture task above).
+It records actual source, native task/trial identities and original metadata hash
+without Docker or model requests. `ROUTER_FORGE_NATIVE_SOURCE_EVIDENCE` optionally
+saves redacted JSON at an absolute path. A missing task, registry/network failure or
+unavailable native API is an explicit failure, not a cache fallback. Source-only
+success is not a verifier, paid-model or complete-trial result.
 
-The run is one task/attempt, concurrency one, zero trial retries, at most five
-requests and 256 output tokens per request. The fixture does not solve or modify
-the task: an independently verified zero reward is an infrastructure outcome, not
-a real model benchmark score. The test checks request attribution/native synthetic
-usage and public result reattachment. It cancels only its own run on failure and
-retains its private failed-trial directory for diagnosis; successful disposable
-profiles/jobs are cleaned up. This heavier check stays opt-in and is not enabled
-in CI. `ROUTER_FORGE_HARBOR_MOCK_EVIDENCE` optionally saves redacted JSON to an
-absolute file path; do not publish raw Harbor logs or call fixture output a score.
+The trial fixture is one task/attempt, concurrency one, zero trial retries, at most
+five requests and 256 output tokens per request. It does not solve or modify the
+task: an independently verified zero reward is an infrastructure outcome, not a
+real model benchmark score. It checks request attribution/native synthetic usage
+and public result reattachment, cancels only its own run on failure and retains
+private failed-trial artifacts for diagnosis. Successful disposable profiles/jobs
+are cleaned up. This heavier check stays opt-in and is not enabled in CI.
+`ROUTER_FORGE_HARBOR_MOCK_EVIDENCE` optionally saves redacted JSON to an absolute
+file path; do not publish raw Harbor logs or call fixture output a score.
 
 Do not treat a Vite-only page, process exit code, synthetic-provider trial, or
 historical benchmark result as native/live acceptance. A real evaluation requires

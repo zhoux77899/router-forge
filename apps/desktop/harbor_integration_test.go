@@ -40,6 +40,15 @@ func TestWSLHarborMockTrial(t *testing.T) {
 	if requestedTask == "" {
 		requestedTask = "swe-bench/django__django-13741"
 	}
+	var executionNetworks harborFixtureNetworks
+	readHarborFixtureNetwork(t, "ROUTER_FORGE_HARBOR_EXECUTION_NETWORKS", &executionNetworks)
+	var modelNetwork domain.NetworkProfileInput
+	readHarborFixtureNetwork(t, "ROUTER_FORGE_HARBOR_MODEL_NETWORK", &modelNetwork)
+	gatewayMode := os.Getenv("ROUTER_FORGE_HARBOR_DOCKER_GATEWAY_MODE")
+	gatewayAddress := os.Getenv("ROUTER_FORGE_HARBOR_DOCKER_GATEWAY")
+	if gatewayMode != "detect" && gatewayMode != "manual" || gatewayMode == "manual" && strings.TrimSpace(gatewayAddress) == "" {
+		t.Fatal("fixture requires an explicit Docker gateway mode and any manual address")
+	}
 	profile := t.TempDir()
 	options := resourceOptions(resources, profile)
 	registerBundleBackendCleanup(t, profile)
@@ -110,11 +119,31 @@ func TestWSLHarborMockTrial(t *testing.T) {
 	var environment domain.Environment
 	bundleAPICall(t, console, http.MethodPost, "/api/environments", domain.Environment{
 		Name: "Synthetic Harbor acceptance", Type: "wsl", Distribution: distribution, WorkDir: workDir,
-		CACertPath: os.Getenv("ROUTER_FORGE_HARBOR_CA"), ProxyURL: os.Getenv("ROUTER_FORGE_HARBOR_PROXY"), NoProxy: os.Getenv("ROUTER_FORGE_HARBOR_NO_PROXY"),
+		DockerGatewayMode: gatewayMode, DockerHostGateway: gatewayAddress,
 	}, &environment)
+	bindings := domain.EnvironmentNetworks{}
+	for _, stage := range []struct {
+		input *domain.NetworkProfileInput
+		id    *string
+	}{{&executionNetworks.Source, &bindings.SourceProfileID}, {&executionNetworks.Build, &bindings.BuildProfileID}, {&executionNetworks.Agent, &bindings.AgentProfileID}, {&executionNetworks.Verifier, &bindings.VerifierProfileID}} {
+		if stage.input.Profile.Scope != domain.NetworkEnvironment || stage.input.Profile.EnvironmentID != "" || stage.input.Profile.ID != "" || stage.input.Profile.Revision != "" {
+			t.Fatal("fixture execution profiles must explicitly target the generated host, not reuse another host or revision")
+		}
+		stage.input.Profile.EnvironmentID = environment.ID
+		var saved domain.NetworkProfile
+		bundleAPICall(t, console, http.MethodPost, "/api/network-profiles", *stage.input, &saved)
+		*stage.id = saved.ID
+	}
+	environment.Networks = &bindings
+	bundleAPICall(t, console, http.MethodPost, "/api/environments", environment, &environment)
+	if modelNetwork.Profile.Scope != domain.NetworkDesktop || modelNetwork.Profile.EnvironmentID != "" || modelNetwork.Profile.ID != "" || modelNetwork.Profile.Revision != "" {
+		t.Fatal("fixture model profile must explicitly target Desktop without a reused revision")
+	}
+	var savedModelNetwork domain.NetworkProfile
+	bundleAPICall(t, console, http.MethodPost, "/api/network-profiles", modelNetwork, &savedModelNetwork)
 	var providerConfig domain.Provider
 	bundleAPICall(t, console, http.MethodPost, "/api/providers", domain.ProviderInput{
-		Name: "Synthetic local provider; no inference", BaseURL: provider.URL + "/v1", APIKey: stringPointer(key),
+		Name: "Synthetic local provider; no inference", BaseURL: provider.URL + "/v1", APIKey: stringPointer(key), NetworkProfileID: &savedModelNetwork.ID,
 	}, &providerConfig)
 	var modelConfig domain.Model
 	bundleAPICall(t, console, http.MethodPost, "/api/models", domain.Model{
@@ -147,7 +176,11 @@ func TestWSLHarborMockTrial(t *testing.T) {
 		t.Error("owned Harbor fixture did not finish cancellation")
 	})
 	var started domain.Run
-	bundleAPICall(t, console, http.MethodPost, "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, &started)
+	bundleAPICall(t, console, http.MethodPost, "/api/runs/"+draft.ID+"/start", domain.StartInput{
+		ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash,
+		ConfirmExecutionTLSRisk: os.Getenv("ROUTER_FORGE_HARBOR_CONFIRM_EXECUTION_TLS_RISK") == "1",
+		ConfirmModelTLSRisk:     os.Getenv("ROUTER_FORGE_HARBOR_CONFIRM_MODEL_TLS_RISK") == "1",
+	}, &started)
 	deadline := time.Now().Add(40 * time.Minute)
 	run := started
 	lastState := ""
@@ -214,16 +247,20 @@ func TestWSLHarborMockTrial(t *testing.T) {
 		}
 	}
 	var provenance struct {
-		ConfigHash        string                  `json:"config_hash"`
-		DatasetVersion    string                  `json:"dataset_version"`
-		DatasetDigest     string                  `json:"dataset_digest"`
-		DatasetRevision   string                  `json:"dataset_revision"`
-		Task              domain.BenchmarkTask    `json:"task"`
-		Runtime           *domain.RuntimeSnapshot `json:"runtime"`
-		AgentInstallation string                  `json:"agent_installation"`
-		AgentVersion      string                  `json:"agent_version"`
-		ImageDigests      []string                `json:"image_digests"`
-		ExecutionState    string                  `json:"execution_state"`
+		ConfigHash           string                  `json:"config_hash"`
+		DatasetVersion       string                  `json:"dataset_version"`
+		DatasetDigest        string                  `json:"dataset_digest"`
+		DatasetRevision      string                  `json:"dataset_revision"`
+		Task                 domain.BenchmarkTask    `json:"task"`
+		Runtime              *domain.RuntimeSnapshot `json:"runtime"`
+		AgentInstallation    string                  `json:"agent_installation"`
+		AgentVersion         string                  `json:"agent_version"`
+		ImageDigests         []string                `json:"image_digests"`
+		ExecutionState       string                  `json:"execution_state"`
+		Network                 *domain.NetworkSnapshot `json:"network"`
+		NetworkEvidenceKind     string                  `json:"network_evidence_kind"`
+		VerifierTLSVerification string                  `json:"verifier_tls_verification"`
+		StageCASHA256           map[string]string       `json:"stage_ca_sha256"`
 	}
 	provenanceCtx, stopProvenance := context.WithTimeout(context.Background(), 15*time.Second)
 	data, provenanceErr := exec.CommandContext(provenanceCtx, "wsl.exe", "-d", distribution, "--exec", "cat", "--", workDir+"/"+run.ID+"/"+attempt.ID+"/provenance.json").Output()
@@ -235,6 +272,11 @@ func TestWSLHarborMockTrial(t *testing.T) {
 	acknowledgedRuntime, _ := json.Marshal(run.Snapshot.Runtime)
 	if provenance.ConfigHash != draft.Snapshot.ConfigHash || provenance.DatasetVersion != draft.Snapshot.Suite.Version || provenance.DatasetDigest != draft.Snapshot.DatasetDigest || provenance.DatasetRevision != draft.Snapshot.DatasetRevision || provenance.Task != draft.Snapshot.ResolvedTasks[0] || string(privateRuntime) != string(acknowledgedRuntime) || provenance.AgentInstallation != "harbor_default" || provenance.AgentVersion != attempt.AgentVersion || strings.Join(provenance.ImageDigests, "\n") != strings.Join(attempt.ImageDigests, "\n") || provenance.ExecutionState != "completed" {
 		t.Fatal("final private evidence lost the approved source, actual acknowledged runtime or original image identities")
+	}
+	privateNetwork, _ := json.Marshal(provenance.Network)
+	approvedNetwork, _ := json.Marshal(draft.Snapshot.Network)
+	if provenance.Network == nil || string(privateNetwork) != string(approvedNetwork) || provenance.NetworkEvidenceKind != "frozen_configuration_not_connection_success" || provenance.VerifierTLSVerification != string(domain.NetworkVerifyTLS) || run.Snapshot.Environment.SkipTLSVerification || run.Snapshot.Environment.CACertPath != "" {
+		t.Fatal("final private evidence lost frozen stage policies or falsely treated configuration as connection proof")
 	}
 	privateProvenanceVerified = true
 	reattached := newConsole()
@@ -251,6 +293,35 @@ func TestWSLHarborMockTrial(t *testing.T) {
 	}
 	saveEvidence(true)
 	t.Logf("Original one-task Harbor trial verified with synthetic provider only: run=%s task=%s attempt=%s requests=%d reward=0; benchmark_scores=null", run.ID, run.Tasks[0].ID, attempt.ID, records.Total)
+}
+
+type harborFixtureNetworks struct {
+	Source   domain.NetworkProfileInput `json:"source"`
+	Build    domain.NetworkProfileInput `json:"build"`
+	Agent    domain.NetworkProfileInput `json:"agent"`
+	Verifier domain.NetworkProfileInput `json:"verifier"`
+}
+
+func readHarborFixtureNetwork(t *testing.T, parameter string, output any) {
+	t.Helper()
+	path := os.Getenv(parameter)
+	if !filepath.IsAbs(path) {
+		t.Fatalf("%s must select an absolute fixture JSON file; network modes are never inferred", parameter)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("%s fixture JSON file could not be opened", parameter)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, (256<<10)+1))
+	if err != nil || len(data) > 256<<10 {
+		t.Fatalf("%s fixture JSON file is unreadable or oversized", parameter)
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(output) != nil || decoder.Decode(new(any)) != io.EOF {
+		t.Fatalf("%s fixture JSON file is invalid", parameter)
+	}
 }
 
 func harborFixtureTerminal(state string) bool {
