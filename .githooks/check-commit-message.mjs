@@ -8,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 
 try {
-  if (args.length > 1) throw new Error('Usage: npm run lint:commit -- <message-file>');
+  if (args.length > 1) throw new Error('Usage: bun run lint:commit <message-file>');
   const path = args[0] ?? execFileSync('git', ['rev-parse', '--git-path', 'COMMIT_EDITMSG'], {
     cwd: root, encoding: 'utf8', windowsHide: true,
   }).trim();

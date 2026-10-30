@@ -1,21 +1,22 @@
 # Contributing
 
-Router Forge is in its initialization stage. Contributions currently establish
-project documentation and repository tooling. Discuss product behavior in an issue
-before proposing a substantial change. Keep unrelated work in separate commits.
+Router Forge is a Go/Bun application workspace. Discuss substantial behavior changes
+in an issue and keep unrelated work in separate commits. Start with the application
+workflow and platform constraints in [README.md](README.md).
 
 ## Prepare the repository tooling
 
-Use Git, Node.js 22.12.0 or newer, and npm. From the repository root, install the
-locked development dependencies:
+Use Git, Go 1.27.3, Bun 1.3.14, and Node.js 22.12.0 or newer. From the repository root,
+install the locked frontend and contribution dependencies:
 
 ```text
-npm ci
+bun install --frozen-lockfile
+go mod download
 ```
 
-The npm manifest is for contribution tooling only. There is no product application
-build or startup command yet. Installing dependencies does not enable Git hooks or
-change your Git configuration.
+`bun.lock` is the workspace lockfile; do not create a second npm lockfile. The same
+workspace includes the Desktop/Web applications, shared packages and commitlint.
+Installing dependencies does not enable Git hooks or change your Git configuration.
 
 ### Enable the local commit-message hook
 
@@ -47,9 +48,9 @@ Git for Windows supplies the shell needed to run the hook. The targeted
 The hook, its Node.js message checker, and the commitlint configuration live in
 `.githooks`. The checker removes Git template comments and verbose diffs, rejects
 empty cleaned messages, and calls the installed commitlint CLI. Cleanup helpers
-and commit rules are in `.githooks/commitlint.config.mjs`. Missing Node.js, npm, or
-development dependencies cause a clear failure; the hook never downloads a
-replacement tool or silently skips validation.
+and commit rules are in `.githooks/commitlint.config.mjs`. Missing Node.js or
+installed development dependencies cause a clear failure; the hook never downloads
+a replacement tool or silently skips validation.
 
 ### Optional commit template
 
@@ -194,9 +195,142 @@ eligible for version control.
 
 ## Validation
 
-Repository infrastructure has no maintained test suite. When changing hook or
-workflow logic, use temporary examples to check the affected acceptance and
-rejection cases. Start with syntax and whitespace checks:
+Run the smallest tests that cover the changed package. The complete offline checks
+use local mock providers and benchmark fixtures, not paid model credentials:
+
+```text
+bun run typecheck
+bun test
+bun run test:go
+bun run build:web
+bun run build:backend
+```
+
+When Go DTOs or HTTP endpoints change, regenerate and review both contract layers:
+
+```text
+bun run generate:contracts
+```
+
+`internal/domain` defines the shared types. The Go generator writes OpenAPI and
+`openapi-typescript` writes the SDK types; do not hand-edit generated schemas.
+The native Desktop build additionally requires MyGo's platform prerequisites:
+
+```text
+bun run build:desktop
+```
+
+### Optional production-bundle checks
+
+After `bun run build:desktop` on Windows amd64, run the production backend through
+the actual Desktop Go bridge without opening a GUI:
+
+```powershell
+$env:ROUTER_FORGE_VERIFY_NATIVE_BUNDLE = "1"
+$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\apps\desktop\build\windows-amd64").Path
+go test .\apps\desktop\... -run TestBundledConsoleIntegration -count=1 -timeout 90s
+Remove-Item Env:\ROUTER_FORGE_VERIFY_NATIVE_BUNDLE
+Remove-Item Env:\ROUTER_FORGE_NATIVE_BUNDLE_DIR
+```
+
+The test uses a temporary private profile and a loopback-only dummy provider. It
+checks resource resolution, authenticated configuration writes, credential
+redaction, persistence, cancelled request contexts, same-PID reattachment and the
+built read-only Web. It sends no provider request and stops only its own backend.
+Application CI enables this check after its Windows Desktop build.
+
+The real WSL Docker relay test is separately opt-in. Set
+`ROUTER_FORGE_VERIFY_MOCK_INTEGRATION=1`, `ROUTER_FORGE_MOCK_DISTRIBUTION` to the
+existing distribution, and `ROUTER_FORGE_MOCK_IMAGE_ID` to an already-present
+immutable image ID, then run:
+
+```powershell
+go test .\internal\executor -run TestWSLDockerMockIntegration -count=1 -timeout 300s -v
+```
+
+It uses `--pull=never`, does not launch Harbor or an agent, and does not produce a
+benchmark score. Unset those variables afterwards. Do not reuse its networking
+fixture image as a SWE-bench task environment.
+
+### Optional real Harbor trial with a synthetic provider
+
+The stronger Windows/WSL check uses the built backend and actual Desktop Go bridge,
+the installed Harbor and its default OpenCode container installation, and the
+current registry's exact `swe-bench/django__django-13741` task source and original
+verifier. Dataset resolution follows Harbor's native routing; no Harbor/agent
+version or registry/task commit is fixed by the test. Only the external
+model API is synthetic. It requires the existing Ubuntu Docker/Harbor setup and
+can download the original SWE image and container dependencies; it does not install
+host tools or use a real provider key. Allow adequate disk space and setup time.
+On a slow registry/CDN connection, pre-cache only the unchanged image declared by
+the exact resolved task's environment. Its image may change with the current
+registry source; never substitute an image from an old report. Image pulls use the
+daemon's existing network settings; an environment profile's proxy cannot
+reconfigure that daemon. The worker records the actual immutable identity.
+Do not disable TLS, restart/reconfigure shared host services, or substitute TB4's
+network fixture image. Then run the explicitly enabled test:
+
+```powershell
+$env:ROUTER_FORGE_VERIFY_HARBOR_MOCK = "1"
+$env:ROUTER_FORGE_NATIVE_BUNDLE_DIR = (Resolve-Path ".\apps\desktop\build\windows-amd64").Path
+$env:ROUTER_FORGE_HARBOR_DISTRIBUTION = "Ubuntu"
+go test .\apps\desktop\... -run TestWSLHarborMockTrial -count=1 -timeout 50m -v
+Remove-Item Env:\ROUTER_FORGE_VERIFY_HARBOR_MOCK
+Remove-Item Env:\ROUTER_FORGE_NATIVE_BUNDLE_DIR
+Remove-Item Env:\ROUTER_FORGE_HARBOR_DISTRIBUTION
+```
+
+`ROUTER_FORGE_HARBOR_TASK` can select another exact canonical task from the same
+resolved dataset; absent that variable, the test requests
+`swe-bench/django__django-13741` and fails explicitly if it is unavailable. It never
+substitutes a task or old registry. The draft records the dataset version/digest
+and task SHA/digest once; starting consumes that saved reference. The report checks
+actual uv/Harbor output and an independently acknowledged container CLI version,
+not an expected version number. Configure an existing trusted CA profile when the
+native registry/Hub client requires it; TLS verification must stay enabled. The
+opt-in test reads `ROUTER_FORGE_HARBOR_CA` as an absolute path in the selected native
+environment, for example Ubuntu's existing `/etc/ssl/certs/ca-certificates.crt`.
+`ROUTER_FORGE_HARBOR_PROXY` optionally sets the fixture's HTTP/HTTPS proxy profile
+for native registry downloads and container setup. `ROUTER_FORGE_HARBOR_NO_PROXY`
+optionally sets its comma-separated direct-route exceptions, without changing the
+resolved source. These options also apply to source-only verification. They do not
+change shared Docker daemon proxy settings or global certificate trust; TLS
+verification stays enabled. The approved CA is passed to native/container Git as
+well as curl, Python and Node clients; no system trust store is modified.
+The proxy must be reachable from both the native host
+and Harbor's task containers. Check Docker's allocated subnets for overlap with
+corporate proxy addresses: a host-only connectivity check can pass before a new
+Compose network shadows the proxy route. Use an approved container-reachable
+proxy endpoint without reconfiguring a shared daemon or replacing the task image.
+
+For source-only verification on Linux, enable
+`ROUTER_FORGE_VERIFY_NATIVE_SOURCE=1` and run
+`TestInstalledHarborCurrentSourceAndExactMaterialization` in `internal/executor`.
+This test uses the installed Harbor, resolves the current official dataset once,
+and downloads only the exact `ROUTER_FORGE_HARBOR_TASK` (the same default as above).
+It records the actual source, native task/trial identities and original metadata
+hash without Docker or model requests. `ROUTER_FORGE_NATIVE_SOURCE_EVIDENCE`
+optionally saves redacted JSON at an absolute path. A missing task, registry/network
+failure or unavailable native API is an explicit failure, not a cache fallback.
+
+The run is one task/attempt, concurrency one, zero trial retries, at most five
+requests and 256 output tokens per request. The fixture does not solve or modify
+the task: an independently verified zero reward is an infrastructure outcome, not
+a real model benchmark score. The test checks request attribution/native synthetic
+usage and public result reattachment. It cancels only its own run on failure and
+retains its private failed-trial directory for diagnosis; successful disposable
+profiles/jobs are cleaned up. This heavier check stays opt-in and is not enabled
+in CI. `ROUTER_FORGE_HARBOR_MOCK_EVIDENCE` optionally saves redacted JSON to an
+absolute file path; do not publish raw Harbor logs or call fixture output a score.
+
+Do not treat a Vite-only page, process exit code, synthetic-provider trial, or
+historical benchmark result as native/live acceptance. A real evaluation requires
+explicit authorization of the provider, agent, task and limits. Keep model secrets
+and raw private Harbor artifacts out of CI, test fixtures, screenshots and pull
+requests.
+
+When changing contribution tooling, use temporary examples to check the affected
+acceptance and rejection cases. Check syntax and whitespace:
 
 ```text
 node --check .githooks/commitlint.config.mjs
@@ -207,16 +341,16 @@ git diff --check
 To check a message file directly:
 
 ```text
-npm run lint:commit -- message.txt
+bun run lint:commit message.txt
 ```
 
 For PR-title changes, exercise the inline JavaScript in
 `.github/workflows/pr-title.yml` with valid and invalid `PR_TITLE` values. There is
-no separate npm command for PR-title validation. Report the workflow's check
+no separate workspace command for PR-title validation. Report the workflow's check
 result when it is available on the PR.
 
-Use the smallest relevant checks for your change, and record their actual results
-in the PR.
+Use the smallest relevant checks for your change, and record each exact command and
+its actual result in the PR. State clearly which platform or live checks were not run.
 
 ## Coding agents
 

@@ -1,0 +1,121 @@
+{
+  "job_name": "rf_fixture",
+  "jobs_dir": "/home/fixture/.local/share/router-forge/work/run_fixture/attempt_fixture/jobs",
+  "n_attempts": 1,
+  "install_only": false,
+  "skip_credential_checks": false,
+  "timeout_multiplier": 1,
+  "debug": false,
+  "n_concurrent_trials": 1,
+  "quiet": true,
+  "retry": {
+    "max_retries": 0,
+    "include_exceptions": null,
+    "exclude_exceptions": [],
+    "wait_multiplier": 1,
+    "min_wait_sec": 1,
+    "max_wait_sec": 60
+  },
+  "environment": {
+    "type": "docker",
+    "force_build": false,
+    "delete": true,
+    "stream": false,
+    "cpu_enforcement_policy": "auto",
+    "memory_enforcement_policy": "auto",
+    "mounts": [
+      {
+        "type": "bind",
+        "source": "/home/fixture/ca-profile.pem",
+        "target": "/etc/router-forge/ca.pem",
+        "read_only": true
+      }
+    ],
+    "extra_docker_compose": [
+      "/home/fixture/.local/share/router-forge/work/run_fixture/attempt_fixture/relay-compose.json"
+    ],
+    "env": {
+      "CURL_CA_BUNDLE": "/etc/router-forge/ca.pem",
+      "GIT_SSL_CAINFO": "/etc/router-forge/ca.pem",
+      "NODE_EXTRA_CA_CERTS": "/etc/router-forge/ca.pem",
+      "NO_PROXY": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1",
+      "REQUESTS_CA_BUNDLE": "/etc/router-forge/ca.pem",
+      "SSL_CERT_FILE": "/etc/router-forge/ca.pem",
+      "UV_NATIVE_TLS": "true",
+      "no_proxy": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1"
+    },
+    "kwargs": {
+      "mounts": [
+        {
+          "type": "bind",
+          "source": "/home/fixture/ca-profile.pem",
+          "target": "/etc/router-forge/ca.pem",
+          "read_only": true
+        }
+      ]
+    },
+    "extra_allowed_hosts": []
+  },
+  "verifier": {
+    "disable": false,
+    "env": {
+      "CURL_CA_BUNDLE": "/etc/router-forge/ca.pem",
+      "GIT_SSL_CAINFO": "/etc/router-forge/ca.pem",
+      "NODE_EXTRA_CA_CERTS": "/etc/router-forge/ca.pem",
+      "NO_PROXY": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1",
+      "REQUESTS_CA_BUNDLE": "/etc/router-forge/ca.pem",
+      "SSL_CERT_FILE": "/etc/router-forge/ca.pem",
+      "UV_NATIVE_TLS": "true",
+      "no_proxy": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1"
+    },
+    "kwargs": {},
+    "extra_allowed_hosts": []
+  },
+  "metrics": [],
+  "agents": [
+    {
+      "name": "opencode",
+      "model_name": "router-forge/fixture-model",
+      "base_url": "http://router-forge-gateway:4567/v1",
+      "model_api_key_name": "ROUTER_FORGE_ATTEMPT_TOKEN",
+      "model_api_format": "openai_chat_completions",
+      "skip_model_parsing": true,
+      "n_concurrent": 1,
+      "override_timeout_sec": 60,
+      "override_setup_timeout_sec": 30,
+      "max_timeout_sec": 60,
+      "resume_trajectory": false,
+      "skills": [],
+      "extra_allowed_hosts": [
+        "router-forge-gateway"
+      ],
+      "kwargs": {},
+      "env": {
+        "CURL_CA_BUNDLE": "/etc/router-forge/ca.pem",
+        "GIT_SSL_CAINFO": "/etc/router-forge/ca.pem",
+        "NODE_EXTRA_CA_CERTS": "/etc/router-forge/ca.pem",
+        "NO_PROXY": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1",
+        "REQUESTS_CA_BUNDLE": "/etc/router-forge/ca.pem",
+        "SSL_CERT_FILE": "/etc/router-forge/ca.pem",
+        "UV_NATIVE_TLS": "true",
+        "no_proxy": "router-forge-gateway,172.17.0.1,localhost,127.0.0.1"
+      },
+      "mcp_servers": []
+    }
+  ],
+  "datasets": [],
+  "tasks": [
+    {
+      "path": "arbitrary-layout/fixture__task-1",
+      "git_url": "https://code.fixture.test/tasks.git",
+      "git_commit_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "swe-bench/swe-bench-verified",
+      "overwrite": false,
+      "download_dir": "/home/fixture/.local/share/router-forge/work/run_fixture/attempt_fixture/task-cache"
+    }
+  ],
+  "artifacts": [],
+  "extra_instruction_paths": [],
+  "extra_instructions": [],
+  "source_jobs": []
+}

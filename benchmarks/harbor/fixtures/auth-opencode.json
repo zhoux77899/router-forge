@@ -1,0 +1,1 @@
+{"agent":"opencode","supports_model_connection":true,"supports_overriding_base_url":true,"default_provider":null,"supported_api_formats":["openai_chat_completions","anthropic_messages"],"fallback_api_key_candidate_names":["OPENAI_API_KEY"]}

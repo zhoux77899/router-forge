@@ -29,6 +29,19 @@ jobs/
 
 # Dependencies
 node_modules/
+.mygo/
+
+# Application build artifacts
+/build/
+/apps/desktop/build/
+/apps/desktop/dist/
+/apps/desktop/mygo-out/
+/apps/web/dist/
+/packages/*/dist/
+
+# App state is stored outside the checkout
+/router-forge-data/
+/benchmarks/harbor/jobs/
 
 # Caches, test output and logs
 .cache/
