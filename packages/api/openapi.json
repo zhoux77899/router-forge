@@ -1,0 +1,2433 @@
+{
+  "components": {
+    "schemas": {
+      "Agent": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "container_install": {
+            "type": "string"
+          },
+          "harbor_supported": {
+            "type": "boolean"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "schema": {},
+          "supported_protocols": {
+            "items": {
+              "enum": [
+                "chat_completions",
+                "responses",
+                "anthropic_messages"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "supports_version": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "command",
+          "installed",
+          "harbor_supported",
+          "supported_protocols",
+          "supports_version",
+          "container_install"
+        ],
+        "type": "object"
+      },
+      "Attempt": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_version": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "exception_type": {
+            "type": "string"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "harbor_metrics": {},
+          "id": {
+            "type": "string"
+          },
+          "image_digests": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "job_name": {
+            "type": "string"
+          },
+          "result_path": {
+            "type": "string"
+          },
+          "reward": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "trial_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "run_id",
+          "state",
+          "job_name",
+          "started_at",
+          "finished_at",
+          "reward",
+          "exit_code",
+          "image_digests"
+        ],
+        "type": "object"
+      },
+      "BenchmarkTask": {
+        "additionalProperties": false,
+        "properties": {
+          "git_commit": {
+            "type": "string"
+          },
+          "git_url": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "package_name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CurrencyTotal": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "estimated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currency",
+          "amount",
+          "estimated"
+        ],
+        "type": "object"
+      },
+      "Environment": {
+        "additionalProperties": false,
+        "properties": {
+          "ca_cert_path": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "distribution": {
+            "type": "string"
+          },
+          "docker_host_gateway": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identity_file": {
+            "type": "string"
+          },
+          "known_hosts_file": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "no_proxy": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "proxy_url": {
+            "type": "string"
+          },
+          "tools": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "work_dir": {
+            "type": "string"
+          },
+          "worker_arch": {
+            "type": "string"
+          },
+          "worker_os": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "EnvironmentInput": {
+        "additionalProperties": false,
+        "properties": {
+          "ca_cert_path": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "distribution": {
+            "type": "string"
+          },
+          "docker_host_gateway": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "identity_file": {
+            "type": "string"
+          },
+          "known_hosts_file": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "no_proxy": {
+            "type": "string"
+          },
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "proxy_url": {
+            "type": "string"
+          },
+          "tools": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "type": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "work_dir": {
+            "type": "string"
+          },
+          "worker_arch": {
+            "type": "string"
+          },
+          "worker_os": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "ExecutionObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_version": {
+            "type": "string"
+          },
+          "agent_version_output": {
+            "type": "string"
+          },
+          "docker_gateway": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "registry_url": {
+            "type": "string"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BenchmarkTask"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "task_name": {
+            "type": "string"
+          },
+          "task_path": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolStatus"
+            },
+            "type": "array"
+          },
+          "trial_prefix": {
+            "type": "string"
+          },
+          "work_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "Inspection": {
+        "additionalProperties": false,
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/Agent"
+            },
+            "type": "array"
+          },
+          "arch": {
+            "type": "string"
+          },
+          "docker_gateway": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "home_dir": {
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "os": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolStatus"
+            },
+            "type": "array"
+          },
+          "work_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment_id",
+          "os",
+          "arch",
+          "home_dir",
+          "work_dir",
+          "ready",
+          "tools",
+          "agents",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "JobEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "timestamp",
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "Model": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pricing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "anthropic_messages"
+            ],
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "name",
+          "display_name",
+          "protocol",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ModelInput": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Pricing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "anthropic_messages"
+            ],
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "name",
+          "display_name",
+          "protocol"
+        ],
+        "type": "object"
+      },
+      "Pricing": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_read_per_million": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cache_write_per_million": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "input_per_million": {
+            "type": "string"
+          },
+          "output_per_million": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "input_per_million",
+          "output_per_million",
+          "source"
+        ],
+        "type": "object"
+      },
+      "Protocol": {
+        "enum": [
+          "chat_completions",
+          "responses",
+          "anthropic_messages"
+        ],
+        "type": "string"
+      },
+      "Provider": {
+        "additionalProperties": false,
+        "properties": {
+          "base_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "has_key": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key_hint": {
+            "type": "string"
+          },
+          "key_revision": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_url",
+          "has_key",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ProviderInput": {
+        "additionalProperties": false,
+        "properties": {
+          "api_key": {
+            "description": "Stored as plaintext in the private local SQLite database. Omit/null to retain; empty string clears active and historical credential values. Clearing is not cryptographic disk erasure.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "writeOnly": true
+          },
+          "base_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "base_url"
+        ],
+        "type": "object"
+      },
+      "RequestRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_model": {
+            "type": "string"
+          },
+          "attempt_id": {
+            "type": "string"
+          },
+          "cost_amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cost_source": {
+            "type": "string"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_class": {
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "first_byte_ms": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "http_status": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "protocol": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "anthropic_messages"
+            ],
+            "type": "string"
+          },
+          "provider_id": {
+            "type": "string"
+          },
+          "requested_model": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "upstream_request_id": {
+            "type": "string"
+          },
+          "upstream_response_id": {
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "task_id",
+          "attempt_id",
+          "provider_id",
+          "model_id",
+          "protocol",
+          "kind",
+          "requested_model",
+          "actual_model",
+          "started_at",
+          "finished_at",
+          "duration_ms",
+          "first_byte_ms",
+          "http_status",
+          "state",
+          "usage",
+          "cost_amount",
+          "currency",
+          "cost_source"
+        ],
+        "type": "object"
+      },
+      "RequestRecordPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RequestRecord"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "RequestSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_read_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cache_write_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/CurrencyTotal"
+            },
+            "type": "array"
+          },
+          "inference_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "input_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reasoning_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "request_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unknown_cost_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "unknown_usage_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "request_count",
+          "inference_count",
+          "unknown_usage_count",
+          "unknown_cost_count",
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "reasoning_tokens",
+          "costs"
+        ],
+        "type": "object"
+      },
+      "ResolvedBenchmark": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_digest": {
+            "type": "string"
+          },
+          "dataset_revision": {
+            "type": "string"
+          },
+          "registry_kind": {
+            "type": "string"
+          },
+          "registry_metadata_url": {
+            "type": "string"
+          },
+          "resolution_hash": {
+            "type": "string"
+          },
+          "resolved_at": {
+            "type": "string"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/Suite"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkTask"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "suite",
+          "registry_kind",
+          "resolved_at",
+          "resolution_hash",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "Run": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/RunSnapshot"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RequestSummary"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "snapshot",
+          "tasks",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "RunPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "RunSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "config_hash": {
+            "type": "string"
+          },
+          "dataset_digest": {
+            "type": "string"
+          },
+          "dataset_revision": {
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/Environment"
+          },
+          "format_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "harbor_version": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/Model"
+          },
+          "preflight_tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolStatus"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "registry_kind": {
+            "type": "string"
+          },
+          "registry_metadata_url": {
+            "type": "string"
+          },
+          "resolution_hash": {
+            "type": "string"
+          },
+          "resolved_at": {
+            "type": "string"
+          },
+          "resolved_tasks": {
+            "items": {
+              "$ref": "#/components/schemas/BenchmarkTask"
+            },
+            "type": "array"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RuntimeSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spec": {
+            "$ref": "#/components/schemas/RunSpec"
+          },
+          "suite": {
+            "$ref": "#/components/schemas/Suite"
+          },
+          "uv_version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "spec",
+          "environment",
+          "model",
+          "provider",
+          "suite",
+          "harbor_version",
+          "agent",
+          "config_hash"
+        ],
+        "type": "object"
+      },
+      "RunSpec": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "agent_kwargs": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "agent_version": {
+            "deprecated": true,
+            "description": "Historical reports only. Omit for new runs: Harbor uses its default container installation and the actual CLI version is independently observed before inference. Nonempty values in new run requests are rejected.",
+            "type": "string"
+          },
+          "attempts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "concurrency": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "confirm_paid": {
+            "type": "boolean"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "max_output_tokens": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "max_requests": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "setup_timeout_sec": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "suite_id": {
+            "type": "string"
+          },
+          "task_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeout_sec": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "environment_id",
+          "model_id",
+          "suite_id",
+          "task_names",
+          "agent",
+          "timeout_sec",
+          "setup_timeout_sec",
+          "max_requests",
+          "max_output_tokens",
+          "concurrency",
+          "attempts",
+          "confirm_paid"
+        ],
+        "type": "object"
+      },
+      "RuntimeSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_observed_at": {
+            "type": "string"
+          },
+          "agent_version": {
+            "type": "string"
+          },
+          "agent_version_output": {
+            "type": "string"
+          },
+          "docker_gateway": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string"
+          },
+          "registry_url": {
+            "type": "string"
+          },
+          "task_name": {
+            "type": "string"
+          },
+          "task_path": {
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolStatus"
+            },
+            "type": "array"
+          },
+          "trial_prefix": {
+            "type": "string"
+          },
+          "work_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tools",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "StartInput": {
+        "properties": {
+          "confirm_paid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "confirm_paid"
+        ],
+        "type": "object"
+      },
+      "Status": {
+        "properties": {
+          "pid": {
+            "type": "integer"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "pid",
+          "running"
+        ],
+        "type": "object"
+      },
+      "Suite": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "registry_url": {
+            "type": "string"
+          },
+          "suggested_task": {
+            "type": "string"
+          },
+          "task_commit": {
+            "type": "string"
+          },
+          "task_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "task_repository": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "dataset",
+          "version",
+          "registry_url",
+          "task_repository",
+          "task_commit",
+          "task_count",
+          "suggested_task"
+        ],
+        "type": "object"
+      },
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/Attempt"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "name",
+          "state",
+          "attempts"
+        ],
+        "type": "object"
+      },
+      "ToolStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "version_output": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "available"
+        ],
+        "type": "object"
+      },
+      "Usage": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_read_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cache_write_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "completeness": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasoning_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "reasoning_tokens",
+          "total_tokens",
+          "source",
+          "completeness"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "controlToken": {
+        "description": "Ephemeral local control token delivered by the native Desktop bridge, not a model provider API key.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Loopback-only read-only results; authenticated Desktop control. Provider keys are write-only and intentionally stored as plaintext in the user's private SQLite database. One explicit task and no implicit paid reruns.",
+    "title": "Router Forge local backend",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/benchmarks": {
+      "get": {
+        "operationId": "listBenchmarks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Suite"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      }
+    },
+    "/api/benchmarks/{id}/resolve": {
+      "get": {
+        "operationId": "resolveBenchmark",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "environment_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedBenchmark"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/benchmarks/{id}/tasks": {
+      "get": {
+        "operationId": "listBenchmarkTasks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "environment_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BenchmarkTask"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/environments": {
+      "get": {
+        "operationId": "listEnvironments",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Environment"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "saveEnvironment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/environments/{id}/inspect": {
+      "post": {
+        "operationId": "inspectEnvironment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inspection"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/models": {
+      "get": {
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Model"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "saveModel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/providers": {
+      "get": {
+        "operationId": "listProviders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Provider"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "saveProvider",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Provider"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/requests": {
+      "get": {
+        "operationId": "listRequests",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "run_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attempt_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRecordPage"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "operationId": "listRuns",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/runs/{id}": {
+      "get": {
+        "operationId": "getRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      }
+    },
+    "/api/runs/{id}/cancel": {
+      "post": {
+        "operationId": "cancelRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/runs/{id}/events": {
+      "get": {
+        "operationId": "listRunEvents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobEvent"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      }
+    },
+    "/api/runs/{id}/start": {
+      "post": {
+        "operationId": "startRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        },
+        "security": [
+          {
+            "controlToken": []
+          }
+        ]
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Invalid configuration"
+          },
+          "401": {
+            "description": "Control authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Invalid state or incompatible environment"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787"
+    }
+  ]
+}

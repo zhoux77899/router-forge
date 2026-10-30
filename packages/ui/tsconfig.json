@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@router-forge/ui/*": ["./src/*"] },
+    "types": ["bun", "react", "react-dom"]
+  },
+  "include": ["src"]
+}

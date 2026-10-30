@@ -1,14 +1,38 @@
 {
   "name": "router-forge",
   "private": true,
-  "description": "Repository contribution tooling for Router Forge",
+  "description": "Desktop-controlled benchmark execution and native-protocol model metering",
+  "packageManager": "bun@1.3.14",
+  "workspaces": ["apps/desktop", "apps/web", "packages/api", "packages/ui"],
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "lint:commit": "node .githooks/check-commit-message.mjs"
+    "lint:commit": "node .githooks/check-commit-message.mjs",
+    "dev:desktop": "bun run --filter @router-forge/desktop dev",
+    "dev:web": "bun run --filter @router-forge/web dev",
+    "generate:api": "openapi-typescript packages/api/openapi.json -o packages/api/src/schema.generated.ts",
+    "generate:contracts": "go run ./scripts/generate-api && bun run generate:api",
+    "typecheck": "bun run --workspaces --if-present typecheck",
+    "test": "bun test",
+    "test:go": "go test ./internal/... ./apps/server/... ./apps/worker/...",
+    "build:backend": "bun scripts/build-backend.ts",
+    "build:web": "bun run --filter @router-forge/web build",
+    "build:desktop": "bun run build:web && bun run build:backend && bun run --filter @router-forge/desktop build",
+    "verify:offline": "bun run typecheck && bun test && bun run test:go && bun run build:web"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.4"
+    "@commitlint/cli": "21.2.4",
+    "@tailwindcss/vite": "4",
+    "@types/bun": "1.4.4",
+    "@types/react": "19",
+    "@types/react-dom": "19",
+    "@vitejs/plugin-react": "5",
+    "mygo-cli": "0.7.1",
+    "openapi-typescript": "7",
+    "shadcn": "3",
+    "tailwindcss": "4",
+    "typescript": "5.9.3",
+    "vite": "7"
   }
 }
