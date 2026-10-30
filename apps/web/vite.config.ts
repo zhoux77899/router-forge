@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { validateProxyOrigin } from "./src/proxy";
+import { join } from "node:path";
 
 const target = validateProxyOrigin(process.env.ROUTER_FORGE_API_URL);
 const proxy = target ? { "/api": { target, changeOrigin: false } } : undefined;
@@ -24,5 +25,5 @@ export default defineConfig({
   base: "./",
   server: { host: "127.0.0.1", port: 5173, strictPort: true, proxy },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true, proxy },
-  build: { outDir: "dist", sourcemap: false },
+  build: { outDir: join("..", "..", "build", "dist"), emptyOutDir: true, sourcemap: false },
 });

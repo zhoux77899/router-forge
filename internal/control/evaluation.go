@@ -67,6 +67,22 @@ func (s *Server) createRun(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
+	network, err := s.store.FreezeNetwork(ctx, env, provider)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	if env.DockerGatewayMode != "detect" && env.DockerGatewayMode != "manual" {
+		problem(w, fmt.Errorf("select Docker gateway detection or an explicit manual address"))
+		return
+	}
+	runtimeNetworks, err := s.store.ExecutionNetworks(ctx, network)
+	if err != nil {
+		problem(w, err)
+		return
+	}
+	env.NetworkRuntime = runtimeNetworks
+	env.ProxyURL, env.NoProxy, env.CACertPath, env.SkipTLSVerification = "", "", "", false
 	inspection, err := s.executor.Inspect(ctx, env)
 	if err != nil {
 		problem(w, err)
@@ -137,7 +153,7 @@ func (s *Server) createRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.ConfirmPaid = false
-	snapshot := domain.RunSnapshot{Spec: input, Environment: env, Model: model, Provider: provider, Suite: resolved.Suite, HarborVersion: versions["harbor"], UVVersion: versions["uv"], Agent: *agent, FormatVersion: domain.SnapshotFormatVersion, RegistryKind: resolved.RegistryKind, RegistryMetadataURL: resolved.RegistryMetadataURL, DatasetDigest: resolved.DatasetDigest, DatasetRevision: resolved.DatasetRevision, ResolvedAt: resolved.ResolvedAt, ResolutionHash: resolved.ResolutionHash, ResolvedTasks: []domain.BenchmarkTask{*selected}, PreflightTools: append([]domain.ToolStatus{}, inspection.Tools...)}
+	snapshot := domain.RunSnapshot{Spec: input, Environment: env, Model: model, Provider: provider, Suite: resolved.Suite, HarborVersion: versions["harbor"], UVVersion: versions["uv"], Agent: *agent, FormatVersion: domain.SnapshotFormatVersion, RegistryKind: resolved.RegistryKind, RegistryMetadataURL: resolved.RegistryMetadataURL, DatasetDigest: resolved.DatasetDigest, DatasetRevision: resolved.DatasetRevision, ResolvedAt: resolved.ResolvedAt, ResolutionHash: resolved.ResolutionHash, ResolvedTasks: []domain.BenchmarkTask{*selected}, PreflightTools: append([]domain.ToolStatus{}, inspection.Tools...), Network: &network}
 	snapshot.ConfigHash, err = snapshot.ApprovalHash()
 	if err != nil {
 		problem(w, err)
@@ -160,9 +176,7 @@ func (s *Server) createRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
-	input, ok := decode[struct {
-		ConfirmPaid bool `json:"confirm_paid"`
-	}](w, r)
+	input, ok := decode[domain.StartInput](w, r)
 	if !ok {
 		return
 	}
@@ -182,6 +196,28 @@ func (s *Server) startRun(w http.ResponseWriter, r *http.Request) {
 	if err := run.Snapshot.ValidateSources(); err != nil {
 		fail(w, http.StatusConflict, err.Error())
 		return
+	}
+	if input.ConfigHash != run.Snapshot.ConfigHash {
+		fail(w, http.StatusConflict, "start approval must match this exact frozen draft hash")
+		return
+	}
+	if run.Snapshot.Network.ExecutionTLSRisk() && !input.ConfirmExecutionTLSRisk {
+		fail(w, http.StatusBadRequest, "independent confirmation of execution-client TLS risk is required")
+		return
+	}
+	if run.Snapshot.Network.ModelTLSRisk() && !input.ConfirmModelTLSRisk {
+		fail(w, http.StatusBadRequest, "independent confirmation of model HTTPS TLS risk is required")
+		return
+	}
+	if _, err = s.store.ExecutionNetworks(r.Context(), *run.Snapshot.Network); err != nil {
+		problem(w, err)
+		return
+	}
+	if run.Snapshot.Network.Model.ProxyAuth == domain.NetworkBasicAuth {
+		if _, err = s.store.ProxyCredential(r.Context(), run.Snapshot.Network.Model.ID, run.Snapshot.Network.Model.CredentialRevision); err != nil {
+			problem(w, fmt.Errorf("approved model proxy credential reference is unavailable"))
+			return
+		}
 	}
 	if len(run.Tasks) != 1 || len(run.Tasks[0].Attempts) != 1 || run.Tasks[0].Name != run.Snapshot.Spec.TaskNames[0] {
 		fail(w, http.StatusConflict, "draft task and attempt identities are inconsistent")
@@ -272,7 +308,31 @@ func (s *Server) execute(ctx context.Context, run domain.Run, active *activeRun)
 		s.finishRun(run.ID, "failed", "Provider credential reference is unavailable")
 		return
 	}
-	lease := gateway.Lease{RunID: run.ID, TaskID: attempt.TaskID, AttemptID: attempt.ID, Provider: run.Snapshot.Provider, Model: run.Snapshot.Model, APIKey: key, MaxRequests: run.Snapshot.Spec.MaxRequests, MaxOutputTokens: run.Snapshot.Spec.MaxOutputTokens, Timeout: time.Duration(run.Snapshot.Spec.TimeoutSec) * time.Second, AllowedModelNames: []string{run.Snapshot.Model.Name, "router-forge/" + run.Snapshot.Model.Name, "forge/" + run.Snapshot.Model.Name, "rf/" + run.Snapshot.Model.Name}, RequireAgentObservation: true}
+	networks, err := s.store.ExecutionNetworks(ctx, *run.Snapshot.Network)
+	if err != nil {
+		s.failAttempt(attempt, "network_credential_error", "Approved execution proxy credential reference is unavailable")
+		s.finishRun(run.ID, "failed", "Approved execution proxy credential reference is unavailable")
+		return
+	}
+	modelNetwork := run.Snapshot.Network.Model
+	var modelProxyCredential *domain.ProxyCredential
+	if modelNetwork.ProxyAuth == domain.NetworkBasicAuth {
+		credential, err := s.store.ProxyCredential(ctx, modelNetwork.ID, modelNetwork.CredentialRevision)
+		if err != nil {
+			s.failAttempt(attempt, "network_credential_error", "Approved model proxy credential reference is unavailable")
+			s.finishRun(run.ID, "failed", "Approved model proxy credential reference is unavailable")
+			return
+		}
+		modelProxyCredential = &credential
+	}
+	proxySecrets := []string{}
+	for _, credential := range networks.Credentials {
+		proxySecrets = append(proxySecrets, credential.Username, credential.Password)
+	}
+	if modelProxyCredential != nil {
+		proxySecrets = append(proxySecrets, modelProxyCredential.Username, modelProxyCredential.Password)
+	}
+	lease := gateway.Lease{Network: &modelNetwork, ProxyCredential: modelProxyCredential, RunID: run.ID, TaskID: attempt.TaskID, AttemptID: attempt.ID, Provider: run.Snapshot.Provider, Model: run.Snapshot.Model, APIKey: key, MaxRequests: run.Snapshot.Spec.MaxRequests, MaxOutputTokens: run.Snapshot.Spec.MaxOutputTokens, Timeout: time.Duration(run.Snapshot.Spec.TimeoutSec) * time.Second, AllowedModelNames: []string{run.Snapshot.Model.Name, "router-forge/" + run.Snapshot.Model.Name, "forge/" + run.Snapshot.Model.Name, "rf/" + run.Snapshot.Model.Name}, RequireAgentObservation: true}
 	token, err := s.gateway.Register(lease)
 	if err != nil {
 		s.failAttempt(attempt, "gateway_error", "Gateway lease could not be registered")
@@ -286,6 +346,11 @@ func (s *Server) execute(ctx context.Context, run domain.Run, active *activeRun)
 	redact := func(message string) string {
 		message = strings.ReplaceAll(message, key, "[redacted]")
 		message = strings.ReplaceAll(message, token, "[redacted]")
+		for _, secret := range proxySecrets {
+			if secret != "" {
+				message = strings.ReplaceAll(message, secret, "[redacted]")
+			}
+		}
 		if len(message) > 4096 {
 			message = message[:4096]
 		}
@@ -293,7 +358,7 @@ func (s *Server) execute(ctx context.Context, run domain.Run, active *activeRun)
 	}
 	snapshot := run.Snapshot
 	snapshot.Spec.ConfirmPaid = true
-	spec := domain.ExecutionSpec{RunID: run.ID, TaskID: attempt.TaskID, AttemptID: attempt.ID, JobName: attempt.JobName, Snapshot: snapshot, GatewayToken: token}
+	spec := domain.ExecutionSpec{RunID: run.ID, TaskID: attempt.TaskID, AttemptID: attempt.ID, JobName: attempt.JobName, Snapshot: snapshot, GatewayToken: token, Networks: networks}
 	attempt.State = "running"
 	if err = s.store.SaveAttempt(context.Background(), attempt); err != nil {
 		s.finishRun(run.ID, "failed", "Unable to persist attempt start")
@@ -320,6 +385,19 @@ func (s *Server) execute(ctx context.Context, run domain.Run, active *activeRun)
 		s.mu.Unlock()
 		if !owned {
 			return domain.ErrConflict
+		}
+		for i := range observation.Tools {
+			for _, secret := range proxySecrets {
+				if secret != "" {
+					observation.Tools[i].VersionOutput = strings.ReplaceAll(observation.Tools[i].VersionOutput, secret, "[redacted]")
+					observation.Tools[i].Detail = strings.ReplaceAll(observation.Tools[i].Detail, secret, "[redacted]")
+				}
+			}
+		}
+		for _, secret := range proxySecrets {
+			if secret != "" {
+				observation.AgentVersionOutput = strings.ReplaceAll(observation.AgentVersionOutput, secret, "[redacted]")
+			}
 		}
 		b, marshalErr := json.Marshal(observation)
 		if marshalErr != nil {

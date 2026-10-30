@@ -85,7 +85,7 @@ func run() error {
 	}
 	if *web == "" {
 		cwd, _ := os.Getwd()
-		candidate := filepath.Join(cwd, "apps", "web", "dist")
+		candidate := filepath.Join(cwd, "build", "dist")
 		if _, err = os.Stat(candidate); err == nil {
 			*web = candidate
 		}
