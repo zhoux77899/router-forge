@@ -20,18 +20,27 @@ import (
 )
 
 //go:embed harbor_bridge.py
-var nativeHarborBridge string
+var nativeHarborBridgeBody string
+
+//go:embed harbor_network.py
+var nativeHarborNetwork string
+
+var nativeHarborBridge = nativeHarborTLS + "\n" + nativeHarborNetwork + "\n" + nativeHarborBridgeBody
 
 var harborPythonName = regexp.MustCompile(`(?i)^python(?:[0-9]+(?:\.[0-9]+)*)?(?:\.exe)?$`)
 
 type nativeBridgeRequest struct {
-	Operation   string                `json:"operation"`
-	Dataset     string                `json:"dataset,omitempty"`
-	Task        *domain.BenchmarkTask `json:"task,omitempty"`
-	DownloadDir string                `json:"download_dir,omitempty"`
-	ConfigPath  string                `json:"config_path,omitempty"`
-	APIKeyName  string                `json:"api_key_name,omitempty"`
-	CACertPath  string                `json:"ca_cert_path,omitempty"`
+	Operation           string                  `json:"operation"`
+	AgentName           string                  `json:"agent_name,omitempty"`
+	Dataset             string                  `json:"dataset,omitempty"`
+	Task                *domain.BenchmarkTask   `json:"task,omitempty"`
+	DownloadDir         string                  `json:"download_dir,omitempty"`
+	ConfigPath          string                  `json:"config_path,omitempty"`
+	APIKeyName          string                  `json:"api_key_name,omitempty"`
+	CACertPath          string                  `json:"ca_cert_path,omitempty"`
+	SkipTLSVerification bool                    `json:"skip_tls_verification,omitempty"`
+	SourceNetwork       *nativeStageNetwork     `json:"source_network,omitempty"`
+	Network             *harborExecutionNetwork `json:"network,omitempty"`
 }
 
 type nativeResolution struct {
@@ -120,18 +129,20 @@ func nativeBridgeTimeout(operation string) time.Duration {
 
 func nativeBridgeError(code string) error {
 	messages := map[string]string{
-		"unsupported_api":   "installed Harbor lacks required native dataset, task or JobConfig APIs",
-		"invalid_request":   "invalid bounded native Harbor bridge request",
-		"invalid_source":    "native Harbor returned unsafe, ambiguous or unresolved source metadata",
-		"resolution_failed": "native Harbor dataset resolution failed; verify network, access and task availability",
-		"download_failed":   "native Harbor exact task download failed; verify network and recorded source availability",
-		"task_missing":      "native Harbor did not materialize a valid original task and verifier",
-		"task_mismatch":     "native Harbor downloaded a different source than the saved task reference",
-		"cached_task":       "native Harbor reused a task cache instead of downloading the recorded source",
-		"invalid_directory": "native Harbor task download requires an empty private per-attempt directory",
-		"invalid_job":       "native Harbor rejected the one-task JobConfig or its agent options",
-		"contract_ignored":  "native Harbor schema or trial expansion did not honor the required execution contract",
-		"response_limit":    "native Harbor source metadata exceeded its bounded response limit",
+		"unsupported_api":     "installed Harbor lacks required native dataset, task or JobConfig APIs",
+		"unsupported_tls":     "installed Harbor's Python clients cannot honor the explicit scoped TLS policy",
+		"unsupported_network": "installed Harbor cannot honor the explicit source, build, agent or strict verifier network policy",
+		"invalid_request":     "invalid bounded native Harbor bridge request",
+		"invalid_source":      "native Harbor returned unsafe, ambiguous or unresolved source metadata",
+		"resolution_failed":   "native Harbor dataset resolution failed; verify network, access and task availability",
+		"download_failed":     "native Harbor exact task download failed; verify network and recorded source availability",
+		"task_missing":        "native Harbor did not materialize a valid original task and verifier",
+		"task_mismatch":       "native Harbor downloaded a different source than the saved task reference",
+		"cached_task":         "native Harbor reused a task cache instead of downloading the recorded source",
+		"invalid_directory":   "native Harbor task download requires an empty private per-attempt directory",
+		"invalid_job":         "native Harbor rejected the one-task JobConfig or its agent options",
+		"contract_ignored":    "native Harbor schema or trial expansion did not honor the required execution contract",
+		"response_limit":      "native Harbor source metadata exceeded its bounded response limit",
 	}
 	if message, ok := messages[code]; ok {
 		return errors.New(message)
@@ -145,13 +156,36 @@ func runNativeHarborBridge(ctx context.Context, e domain.Environment, harbor str
 	if err != nil {
 		return response, err
 	}
+	if env == nil {
+		selected, source, operationEnv, closeNetwork, err := prepareSourceOperation(ctx, e)
+		if err != nil {
+			return response, err
+		}
+		defer closeNetwork()
+		e, env, request.SourceNetwork = selected, operationEnv, source
+	} else if request.SourceNetwork == nil {
+		profile, _, err := sourceNetwork(e)
+		if err != nil {
+			return response, err
+		}
+		request.SourceNetwork = &nativeStageNetwork{Profile: profile, Env: explicitNetworkEnvironment(env), Mounts: []HarborMount{}}
+	}
+	if request.SourceNetwork.Env["ROUTER_FORGE_NETWORK_STAGE"] != "source" {
+		return response, errors.New("native source operation requires its prepared isolated source configuration")
+	}
+	request.SkipTLSVerification = request.SourceNetwork.Profile.TLSMode == domain.NetworkSkipTLS
+	request.CACertPath = request.SourceNetwork.Env["SSL_CERT_FILE"]
 	argument, err := json.Marshal(request)
 	if err != nil || len(argument) > maxControlBody {
 		return response, errors.New("native Harbor request exceeded its byte limit")
 	}
 	probe, cancel := context.WithTimeout(ctx, nativeBridgeTimeout(request.Operation))
 	defer cancel()
-	command := Command{Path: python, Args: []string{"-I", "-c", nativeHarborBridge, string(argument)}}
+	script, err := ownedNativeBridgeScript(request.SourceNetwork.Env["CURL_HOME"])
+	if err != nil {
+		return response, err
+	}
+	command := Command{Path: python, Args: []string{"-I", "-B", script, string(argument)}}
 	data, _, runErr := runCommand(probe, command, nativeBridgeEnvironment(e, env), "", nil, maxControlBody)
 	if probe.Err() != nil {
 		return response, fmt.Errorf("native Harbor bridge was cancelled or timed out: %w", probe.Err())
@@ -166,6 +200,28 @@ func runNativeHarborBridge(ctx context.Context, e domain.Environment, harbor str
 		return response, errors.New("native Harbor bridge did not complete successfully")
 	}
 	return response, nil
+}
+
+func ownedNativeBridgeScript(directory string) (string, error) {
+	if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
+		return "", errors.New("native bridge requires an owned absolute source configuration directory")
+	}
+	filename := filepath.Join(directory, "native-bridge.py")
+	info, err := os.Lstat(filename)
+	if err == nil {
+		if !info.Mode().IsRegular() || info.Size() != int64(len(nativeHarborBridge)) {
+			return "", errors.New("owned native bridge script is unsafe or changed")
+		}
+		data, err := os.ReadFile(filename)
+		if err != nil || string(data) != nativeHarborBridge {
+			return "", errors.New("owned native bridge script is unsafe or changed")
+		}
+		return filename, nil
+	}
+	if !os.IsNotExist(err) || writePrivate(filename, []byte(nativeHarborBridge)) != nil {
+		return "", errors.New("could not persist owned native bridge script")
+	}
+	return filename, nil
 }
 
 func normalizeNativeResolution(source *nativeResolution) (domain.ResolvedBenchmark, error) {
@@ -256,11 +312,16 @@ func materializeHarborTask(ctx context.Context, e domain.Environment, harbor str
 	return materialized, nil
 }
 
-func validateNativeHarborJob(ctx context.Context, e domain.Environment, harbor string, configPath string, env []string) error {
+func validateNativeHarborJob(ctx context.Context, e domain.Environment, harbor string, configPath string, env []string, networks ...*harborExecutionNetwork) error {
 	if !filepath.IsAbs(configPath) || len(configPath) > 2048 || !validText(configPath) {
 		return nativeBridgeError("invalid_job")
 	}
-	response, err := runNativeHarborBridge(ctx, e, harbor, nativeBridgeRequest{Operation: "validate", ConfigPath: configPath, APIKeyName: attemptKeyName, CACertPath: e.CACertPath}, env)
+	request := nativeBridgeRequest{Operation: "validate", ConfigPath: configPath, APIKeyName: attemptKeyName, CACertPath: e.CACertPath}
+	if len(networks) != 0 {
+		request.Network = networks[0]
+		request.SourceNetwork = networks[0].Source
+	}
+	response, err := runNativeHarborBridge(ctx, e, harbor, request, env)
 	if err != nil {
 		return err
 	}
@@ -270,7 +331,11 @@ func validateNativeHarborJob(ctx context.Context, e domain.Environment, harbor s
 	return nil
 }
 
-func checkNativeHarborCapabilities(ctx context.Context, e domain.Environment, harbor string) error {
-	_, err := runNativeHarborBridge(ctx, e, harbor, nativeBridgeRequest{Operation: "capabilities"}, nil)
+func checkNativeHarborCapabilities(ctx context.Context, e domain.Environment, harbor string, environments ...[]string) error {
+	var env []string
+	if len(environments) != 0 {
+		env = environments[0]
+	}
+	_, err := runNativeHarborBridge(ctx, e, harbor, nativeBridgeRequest{Operation: "capabilities"}, env)
 	return err
 }

@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 )
 
-const SnapshotFormatVersion = 2
+const SnapshotFormatVersion = 3
 
 var taskNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}(?:/[A-Za-z0-9][A-Za-z0-9_.-]{0,127})?$`)
 var commitPattern = regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`)
@@ -176,19 +176,20 @@ func (s RunSnapshot) ApprovalHash() (string, error) {
 	spec := s.Spec
 	spec.ConfirmPaid = false
 	approved := struct {
-		FormatVersion       int             `json:"format_version"`
-		Spec                RunSpec         `json:"spec"`
-		Environment         Environment     `json:"environment"`
-		Model               Model           `json:"model"`
-		Provider            Provider        `json:"provider"`
-		Suite               Suite           `json:"suite"`
-		RegistryKind        string          `json:"registry_kind"`
-		RegistryMetadataURL string          `json:"registry_metadata_url"`
-		DatasetDigest       string          `json:"dataset_digest"`
-		DatasetRevision     string          `json:"dataset_revision"`
-		ResolutionHash      string          `json:"resolution_hash"`
-		ResolvedTasks       []BenchmarkTask `json:"resolved_tasks"`
-	}{s.FormatVersion, spec, s.Environment, s.Model, s.Provider, s.Suite, s.RegistryKind, s.RegistryMetadataURL, s.DatasetDigest, s.DatasetRevision, s.ResolutionHash, s.ResolvedTasks}
+		FormatVersion       int              `json:"format_version"`
+		Spec                RunSpec          `json:"spec"`
+		Environment         Environment      `json:"environment"`
+		Model               Model            `json:"model"`
+		Provider            Provider         `json:"provider"`
+		Suite               Suite            `json:"suite"`
+		RegistryKind        string           `json:"registry_kind"`
+		RegistryMetadataURL string           `json:"registry_metadata_url"`
+		DatasetDigest       string           `json:"dataset_digest"`
+		DatasetRevision     string           `json:"dataset_revision"`
+		ResolutionHash      string           `json:"resolution_hash"`
+		ResolvedTasks       []BenchmarkTask  `json:"resolved_tasks"`
+		Network             *NetworkSnapshot `json:"network,omitempty"`
+	}{s.FormatVersion, spec, s.Environment, s.Model, s.Provider, s.Suite, s.RegistryKind, s.RegistryMetadataURL, s.DatasetDigest, s.DatasetRevision, s.ResolutionHash, s.ResolvedTasks, s.Network}
 	b, err := json.Marshal(approved)
 	if err != nil {
 		return "", err
@@ -203,6 +204,21 @@ func (s RunSnapshot) ValidateSources() error {
 	}
 	if err := s.Spec.Validate(); err != nil {
 		return err
+	}
+	if s.Network == nil {
+		return errors.New("this draft has no explicitly approved network profiles; recreate it after configuring each stage")
+	}
+	if err := s.Network.Validate(s.Spec.EnvironmentID); err != nil {
+		return err
+	}
+	if s.Environment.DockerGatewayMode != "detect" && s.Environment.DockerGatewayMode != "manual" {
+		return errors.New("Docker gateway detection or a manual address must be explicitly selected")
+	}
+	if s.Environment.DockerGatewayMode == "manual" && strings.TrimSpace(s.Environment.DockerHostGateway) == "" {
+		return errors.New("manual Docker gateway requires an explicit address")
+	}
+	if s.Environment.Networks == nil || !s.Environment.Networks.Complete() || s.Environment.Networks.SourceProfileID != s.Network.Source.ID || s.Environment.Networks.BuildProfileID != s.Network.Build.ID || s.Environment.Networks.AgentProfileID != s.Network.Agent.ID || s.Environment.Networks.VerifierProfileID != s.Network.Verifier.ID || s.Provider.NetworkProfileID != s.Network.Model.ID {
+		return errors.New("approved network profile bindings are inconsistent")
 	}
 	expected := SWEBenchVerified()
 	if s.Suite.ID != expected.ID || s.Suite.Dataset != expected.Dataset || !boundedText(s.Suite.Version, 256) || !ValidSourceURL(s.Suite.RegistryURL) || s.Suite.TaskCount < 1 || len(s.ResolvedTasks) != 1 || s.ResolvedTasks[0].Name != s.Spec.TaskNames[0] || !ValidHash(s.ResolutionHash) {

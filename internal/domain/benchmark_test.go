@@ -16,6 +16,12 @@ func snapshotFixture(t *testing.T) RunSnapshot {
 		Environment: Environment{ID: "env"}, Model: Model{ID: "model", Name: "model", ProviderID: "provider", Protocol: ChatCompletions}, Provider: Provider{ID: "provider", KeyRevision: "revision-3"},
 		ResolvedTasks: []BenchmarkTask{{Name: "task", Kind: "git", Path: "another-layout/task", GitURL: "https://github.com/example/tasks.git", GitCommit: strings.Repeat("a", 40)}},
 	}
+	execution := networkFixture(NetworkEnvironment, "env", "execution")
+	modelNetwork := networkFixture(NetworkDesktop, "", "model")
+	s.Network = &NetworkSnapshot{Source: execution, Build: execution, Agent: execution, Verifier: execution, Model: modelNetwork}
+	s.Environment.Networks = &EnvironmentNetworks{SourceProfileID: execution.ID, BuildProfileID: execution.ID, AgentProfileID: execution.ID, VerifierProfileID: execution.ID}
+	s.Environment.DockerGatewayMode = "detect"
+	s.Provider.NetworkProfileID = modelNetwork.ID
 	var err error
 	s.ConfigHash, err = s.ApprovalHash()
 	if err != nil {

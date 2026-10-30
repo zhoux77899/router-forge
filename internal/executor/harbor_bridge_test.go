@@ -28,7 +28,11 @@ func nativeBridgeFixtureResolution() *nativeResolution {
 
 // The copied test executable is an explicit fixture interpreter, never a fallback.
 func init() {
-	if len(os.Args) != 5 || os.Args[1] != "-I" || os.Args[2] != "-c" || os.Args[3] != nativeHarborBridge {
+	if len(os.Args) != 5 || os.Args[1] != "-I" || os.Args[2] != "-B" {
+		return
+	}
+	code, err := os.ReadFile(os.Args[3])
+	if err != nil || string(code) != nativeHarborBridge {
 		return
 	}
 	input, inputErr := io.ReadAll(os.Stdin)
@@ -115,7 +119,10 @@ func bridgeFixtureLauncher(t *testing.T) (domain.Environment, string) {
 	if err := os.WriteFile(harbor, []byte("#!"+python+"\nfixture Harbor launcher\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	return domain.Environment{Tools: map[string]string{"harbor": harbor}}, root
+	environment := fixtureSpec().Snapshot.Environment
+	environment.WorkDir, environment.Tools = root, map[string]string{"harbor": harbor}
+	environment.NetworkRuntime = &domain.ExecutionNetworks{Snapshot: domain.NetworkSnapshot{Source: fixtureNetworkSnapshot(environment.ID).Source}}
+	return environment, root
 }
 
 func TestNativeHarborBridgeResolveAndTasksUseInstalledInterpreter(t *testing.T) {
@@ -251,33 +258,38 @@ func TestNativeHarborPythonNeverUsesAlternateInterpreter(t *testing.T) {
 
 func TestNativeHarborBridgeMaterializationAndValidationAreBounded(t *testing.T) {
 	environment, root := bridgeFixtureLauncher(t)
+	_, _, sourceEnv, closeNetwork, err := prepareSourceOperation(context.Background(), environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeNetwork()
 	task := nativeBridgeFixtureResolution().Tasks[0]
 	directory := filepath.Join(root, "download")
-	materialized, err := materializeHarborTask(context.Background(), environment, "", task, directory, transportEnvironment())
+	materialized, err := materializeHarborTask(context.Background(), environment, "", task, directory, sourceEnv)
 	if err != nil || materialized.Task != task || materialized.Name != "actual__native-task-name" || materialized.TrialPrefix != "task-z" || materialized.Name == materialized.TrialPrefix {
 		t.Fatalf("exact materialization = %#v, %v", materialized, err)
 	}
-	if _, err := materializeHarborTask(context.Background(), environment, "", task, directory, transportEnvironment()); err == nil {
+	if _, err := materializeHarborTask(context.Background(), environment, "", task, directory, sourceEnv); err == nil {
 		t.Fatal("materialization reused a previous download/cache directory")
 	}
 	config := filepath.Join(root, "job.json")
 	if err := os.WriteFile(config, []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateNativeHarborJob(context.Background(), environment, "", config, transportEnvironment()); err != nil {
+	if err := validateNativeHarborJob(context.Background(), environment, "", config, sourceEnv); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateNativeHarborJob(context.Background(), environment, "", config, append(transportEnvironment(), "RF_BRIDGE_EXTRA_TRIAL=1")); err == nil {
+	if err := validateNativeHarborJob(context.Background(), environment, "", config, append(sourceEnv, "RF_BRIDGE_EXTRA_TRIAL=1")); err == nil {
 		t.Fatal("native expansion with two actual trials was accepted")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	_, err = runNativeHarborBridge(ctx, environment, "", nativeBridgeRequest{Operation: "capabilities"}, append(transportEnvironment(), "RF_BRIDGE_WAIT=1"))
+	_, err = runNativeHarborBridge(ctx, environment, "", nativeBridgeRequest{Operation: "capabilities"}, append(sourceEnv, "RF_BRIDGE_WAIT=1"))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("bridge process timeout did not propagate: %v", err)
 	}
 	for _, mode := range []string{"RF_BRIDGE_MALFORMED=1", "RF_BRIDGE_ERROR=1", "RF_BRIDGE_OVERSIZED=1"} {
-		_, err := runNativeHarborBridge(context.Background(), environment, "", nativeBridgeRequest{Operation: "capabilities"}, append(transportEnvironment(), mode))
+		_, err := runNativeHarborBridge(context.Background(), environment, "", nativeBridgeRequest{Operation: "capabilities"}, append(sourceEnv, mode))
 		if err == nil || strings.Contains(err.Error(), "secret") {
 			t.Fatalf("native error output was accepted or leaked: %v", err)
 		}

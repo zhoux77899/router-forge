@@ -15,7 +15,7 @@ func TestDraftSourceSurvivesUpstreamDriftWhileRuntimeToolsCanUpgrade(t *testing.
 	draft := f.draft(t)
 	f.exec.taskCommit = strings.Repeat("b", 40)
 	f.exec.harborVersion = "10.4.2"
-	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, true)
+	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", domain.StartInput{ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash}, true)
 	result[domain.Run](t, code, body)
 	run := waitRun(t, f, draft.ID)
 	if f.exec.resolveCalls.Load() != 1 || run.Snapshot.ResolvedTasks[0].GitCommit != strings.Repeat("a", 40) || run.Snapshot.ConfigHash != draft.Snapshot.ConfigHash {
@@ -56,7 +56,7 @@ func TestUnobservedAgentCannotForwardInferenceOrComplete(t *testing.T) {
 	f := setup(t, false)
 	f.exec.omitAgent = true
 	draft := f.draft(t)
-	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, true)
+	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", domain.StartInput{ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash}, true)
 	result[domain.Run](t, code, body)
 	run := waitRun(t, f, draft.ID)
 	if run.State != "failed" || f.calls.Load() != 0 || run.Snapshot.Runtime == nil || run.Snapshot.Runtime.TaskPath == "" || run.Snapshot.Runtime.AgentVersion != "" {
@@ -70,7 +70,7 @@ func TestAgentPersistenceFailureLeavesGateClosedAndPriorEvidenceIntact(t *testin
 	if _, err := f.store.DB.ExecContext(context.Background(), `CREATE TRIGGER reject_agent_receipt BEFORE UPDATE OF result_json ON evaluation_attempts WHEN COALESCE(json_extract(NEW.result_json, '$.agent_version'), '') != '' BEGIN SELECT RAISE(ABORT, 'fixture durable storage failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, true)
+	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", domain.StartInput{ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash}, true)
 	result[domain.Run](t, code, body)
 	run := waitRun(t, f, draft.ID)
 	if run.State != "failed" || f.calls.Load() != 0 || run.Snapshot.Runtime == nil || run.Snapshot.Runtime.TaskPath == "" || run.Snapshot.Runtime.AgentVersion != "" || run.Tasks[0].Attempts[0].AgentVersion != "" {

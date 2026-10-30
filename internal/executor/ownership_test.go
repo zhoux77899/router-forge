@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/zhoux77899/router-forge/internal/domain"
 )
 
 func TestDockerCancellationNeverRemovesUnownedContainers(t *testing.T) {
@@ -70,29 +72,40 @@ func TestHarborProcessEnvironmentHasNoInheritedProviderOrSSHAuth(t *testing.T) {
 }
 func TestNativeCAMountAlsoReachesSeparateVerifierViaConstructorKwargs(t *testing.T) {
 	spec := fixtureSpec()
-	spec.Snapshot.Environment.CACertPath = "/home/runner/ca-profile.pem"
-	spec.Snapshot.Environment.ProxyURL = "http://proxy.example:3128"
-	spec.Snapshot.Environment.NoProxy = "registry.example"
+	for _, profile := range []*domain.NetworkProfile{&spec.Snapshot.Network.Agent, &spec.Snapshot.Network.Verifier} {
+		profile.TrustMode = domain.NetworkCustomCA
+		profile.CACertPath = "/home/runner/ca-profile.pem"
+	}
+	spec.Snapshot.Network.Agent.ProxyMode = domain.NetworkProxy
+	spec.Snapshot.Network.Agent.ProxyURL = "http://proxy.example:3128"
+	spec.Snapshot.Network.Agent.ProxyTargets = []string{"http", "https"}
+	spec.Snapshot.Network.Agent.ProxyAuth = domain.NetworkNoAuth
+	spec.Snapshot.Network.Agent.NoProxy = "registry.example"
 	spec.Snapshot.Environment.DockerHostGateway = "172.17.0.1"
+	spec.Snapshot.Environment.DockerGatewayMode = "manual"
 	sealFixtureSpec(&spec)
 	cfg, err := BuildHarborJobConfig(spec, domainTask(spec), "http://router-forge-gateway:4567", "/home/runner/work/jobs", "/home/runner/work/compose.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Environment.Mounts) != 1 || !cfg.Environment.Mounts[0].ReadOnly || cfg.Environment.Mounts[0].Source != "/home/runner/ca-profile.pem" || cfg.Environment.Mounts[0].Target != "/etc/router-forge/ca.pem" {
-		t.Fatal("read-only native CA mount missing")
+	if len(cfg.Environment.Mounts) != 2 || !cfg.Environment.Mounts[0].ReadOnly || !cfg.Environment.Mounts[1].ReadOnly || cfg.Environment.Mounts[0].Target != containerNetworkRoot+"/agent" || cfg.Environment.Mounts[1].Target != containerNetworkRoot+"/verifier" {
+		t.Fatal("independent readonly stage mounts missing")
 	}
 	if cfg.Environment.Kwargs["mounts"] == nil {
 		t.Fatal("separate verifier constructor CA mount missing")
 	}
-	for _, env := range []map[string]string{cfg.Agents[0].Env, cfg.Environment.Env, cfg.Verifier.Env} {
-		if env["SSL_CERT_FILE"] != "/etc/router-forge/ca.pem" || env["NODE_EXTRA_CA_CERTS"] != "/etc/router-forge/ca.pem" || env["GIT_SSL_CAINFO"] != "/etc/router-forge/ca.pem" || !strings.Contains(env["NO_PROXY"], "router-forge-gateway,172.17.0.1") {
-			t.Fatalf("container profile = %#v", env)
+	for stage, env := range map[string]map[string]string{"agent": cfg.Agents[0].Env, "verifier": cfg.Verifier.Env} {
+		certificate := containerNetworkRoot + "/" + stage + "/ca.pem"
+		if env["SSL_CERT_FILE"] != certificate || env["NODE_EXTRA_CA_CERTS"] != certificate || env["GIT_SSL_CAINFO"] != certificate {
+			t.Fatalf("stage trust = %#v", env)
 		}
 	}
+	if len(cfg.Environment.Env) != 0 || cfg.Verifier.Env["HTTP_PROXY"] != "" || !strings.Contains(cfg.Agents[0].Env["NO_PROXY"], "router-forge-gateway,172.17.0.1") {
+		t.Fatal("agent networking contaminated the strict verifier")
+	}
 	host := strings.Join(nativeProcessEnv(spec.Snapshot.Environment, projectTestDir(t), ""), "\n")
-	if !strings.Contains(host, "GIT_SSL_CAINFO="+spec.Snapshot.Environment.CACertPath) || strings.Contains(host, "GIT_SSL_CAINFO=/etc/router-forge/ca.pem") {
-		t.Fatal("native Git must use the approved host CA path rather than the container mount path")
+	if strings.Contains(host, "GIT_SSL_CAINFO=") {
+		t.Fatal("agent/verifier CA was inherited by source host execution")
 	}
 	if _, present := profileEnv(fixtureSpec().Snapshot.Environment, "", "", false)["GIT_SSL_CAINFO"]; present {
 		t.Fatal("Git trust must not be overridden when no CA profile is approved")

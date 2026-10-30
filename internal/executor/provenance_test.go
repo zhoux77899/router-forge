@@ -50,6 +50,36 @@ func TestFinalProvenanceRetainsOnlyAcknowledgedRuntimeVersion(t *testing.T) {
 	}
 }
 
+func TestFinalProvenanceRecordsApprovedTLSPolicyOnFailureWithoutInventingConnections(t *testing.T) {
+	for _, skip := range []bool{false, true} {
+		root := projectTestDir(t)
+		path := filepath.Join(root, "provenance.json")
+		snapshot := fixtureSpec().Snapshot
+		snapshot.Network = nil // Historical reports preserve their original TLS evidence.
+		snapshot.Environment.SkipTLSVerification = skip
+		snapshot.Environment.CACertPath = "/retained/ca.pem"
+		record := map[string]any{"config_hash": snapshot.ConfigHash, "skip_tls_verification": skip}
+		initial, _ := json.Marshal(record)
+		if err := writePrivate(path, initial); err != nil {
+			t.Fatal(err)
+		}
+		if err := finalizeProvenance(path, record, snapshot, domain.ExecutionResult{State: "infrastructure_error"}); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var saved map[string]any
+		if err := json.Unmarshal(data, &saved); err != nil {
+			t.Fatal(err)
+		}
+		if saved["skip_tls_verification"] != skip || saved["tls_verification_scope"] != "harbor_and_runtime_container_clients" || saved["execution_state"] != "infrastructure_error" || saved["agent_version"] != "" || snapshot.Environment.CACertPath != "/retained/ca.pem" {
+			t.Fatal("final failure evidence omitted the TLS policy, changed CA or invented runtime facts", saved)
+		}
+	}
+}
+
 func TestFinalProvenanceWriteFailureIsNotIgnored(t *testing.T) {
 	path := projectTestDir(t)
 	if err := finalizeProvenance(path, map[string]any{}, fixtureSpec().Snapshot, domain.ExecutionResult{}); err == nil {

@@ -26,6 +26,7 @@ type fakeExecutor struct {
 	harborVersion string
 	taskCommit    string
 	entered       chan struct{}
+	capture       chan domain.ExecutionSpec
 	calls         atomic.Int64
 	resolveCalls  atomic.Int64
 }
@@ -55,6 +56,9 @@ func (f *fakeExecutor) Tasks(ctx context.Context, env domain.Environment, suite 
 }
 func (f *fakeExecutor) Execute(ctx context.Context, e domain.Environment, spec domain.ExecutionSpec, emit func(domain.WorkerEvent), observe func(domain.ExecutionObservation) error) (domain.ExecutionResult, error) {
 	f.calls.Add(1)
+	if f.capture != nil {
+		f.capture <- spec
+	}
 	inspection, _ := f.Inspect(ctx, e)
 	observations := []domain.ExecutionObservation{
 		{Kind: "tools", Timestamp: domain.Now(), Tools: inspection.Tools, WorkDir: inspection.WorkDir},
@@ -175,7 +179,7 @@ func result[T any](t *testing.T, status int, body []byte) T {
 }
 func (f *fixture) draft(t *testing.T) domain.Run {
 	t.Helper()
-	code, body := f.request(t, "POST", "/api/environments", domain.Environment{Name: "Mock local", Type: "local"}, true)
+	code, body := f.request(t, "POST", "/api/environments", domain.Environment{Name: "Mock local", Type: "local", DockerGatewayMode: "detect"}, true)
 	env := result[domain.Environment](t, code, body)
 	key := "unit-only-provider-key"
 	code, body = f.request(t, "POST", "/api/providers", domain.ProviderInput{Name: "Mock", BaseURL: f.provider.URL + "/v1", APIKey: &key}, true)
@@ -183,6 +187,15 @@ func (f *fixture) draft(t *testing.T) domain.Run {
 	if bytes.Contains(body, []byte(key)) {
 		t.Fatal("key leaked")
 	}
+	code, body = f.request(t, "POST", "/api/network-profiles", domain.NetworkProfileInput{Profile: controlNetworkFixture(domain.NetworkEnvironment, env.ID)}, true)
+	executionNetwork := result[domain.NetworkProfile](t, code, body)
+	code, body = f.request(t, "POST", "/api/network-profiles", domain.NetworkProfileInput{Profile: controlNetworkFixture(domain.NetworkDesktop, "")}, true)
+	modelNetwork := result[domain.NetworkProfile](t, code, body)
+	env.Networks = &domain.EnvironmentNetworks{SourceProfileID: executionNetwork.ID, BuildProfileID: executionNetwork.ID, AgentProfileID: executionNetwork.ID, VerifierProfileID: executionNetwork.ID}
+	code, body = f.request(t, "POST", "/api/environments", env, true)
+	env = result[domain.Environment](t, code, body)
+	code, body = f.request(t, "POST", "/api/providers", domain.ProviderInput{ID: provider.ID, Name: provider.Name, BaseURL: provider.BaseURL, NetworkProfileID: &modelNetwork.ID}, true)
+	provider = result[domain.Provider](t, code, body)
 	code, body = f.request(t, "POST", "/api/models", domain.Model{ProviderID: provider.ID, Name: "mock-model", Protocol: domain.ChatCompletions}, true)
 	model := result[domain.Model](t, code, body)
 	input := domain.RunSpec{EnvironmentID: env.ID, ModelID: model.ID, SuiteID: "swebench-verified", TaskNames: []string{"django__django-13741"}, Agent: "opencode", TimeoutSec: 60, SetupTimeoutSec: 60, MaxRequests: 4, MaxOutputTokens: 128, Concurrency: 1, Attempts: 1}
@@ -216,7 +229,7 @@ func TestDraftApprovalMeteringAndIndependentScore(t *testing.T) {
 	if code != 400 || f.calls.Load() != 0 {
 		t.Fatal("unapproved inference was accepted")
 	}
-	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, true)
+	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", domain.StartInput{ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash}, true)
 	result[domain.Run](t, code, body)
 	run := waitRun(t, f, draft.ID)
 	if run.State != "failed" || f.calls.Load() != 1 || run.Tasks[0].Attempts[0].Reward == nil || *run.Tasks[0].Attempts[0].Reward != 0 || run.Tasks[0].Attempts[0].ExceptionType != "AgentTimeoutError" {
@@ -246,13 +259,13 @@ func TestDraftApprovalMeteringAndIndependentScore(t *testing.T) {
 
 func TestReadOnlyCannotManageOrRebind(t *testing.T) {
 	f := setup(t, false)
-	for _, path := range []string{"/api/providers", "/api/environments", "/api/models"} {
+	for _, path := range []string{"/api/providers", "/api/environments", "/api/models", "/api/network-profiles"} {
 		code, _ := f.request(t, "GET", path, nil, false)
 		if code != 401 {
 			t.Fatal(path, code)
 		}
 	}
-	for _, path := range []string{"/api/providers", "/api/environments", "/api/models", "/api/runs"} {
+	for _, path := range []string{"/api/providers", "/api/environments", "/api/models", "/api/runs", "/api/network-profiles", "/api/network-profiles/unowned/check"} {
 		code, _ := f.request(t, "POST", path, map[string]any{}, false)
 		if code != 401 {
 			t.Fatal(path, code)
@@ -279,7 +292,7 @@ func TestReadOnlyCannotManageOrRebind(t *testing.T) {
 func TestCancellationOnlyAffectsOwnedRun(t *testing.T) {
 	f := setup(t, true)
 	draft := f.draft(t)
-	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", map[string]bool{"confirm_paid": true}, true)
+	code, body := f.request(t, "POST", "/api/runs/"+draft.ID+"/start", domain.StartInput{ConfirmPaid: true, ConfigHash: draft.Snapshot.ConfigHash}, true)
 	result[domain.Run](t, code, body)
 	select {
 	case <-f.exec.entered:

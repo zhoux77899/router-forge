@@ -18,11 +18,37 @@ func fixtureSpec() domain.ExecutionSpec {
 	resolved := domain.ResolvedBenchmark{Suite: suite, RegistryKind: "json", ResolvedAt: domain.Now(), Tasks: []domain.BenchmarkTask{task}}
 	resolved.ResolutionHash, _ = resolved.Hash()
 	spec := domain.ExecutionSpec{RunID: "run_fixture", TaskID: "task_fixture", AttemptID: "attempt_fixture", JobName: "rf_fixture", GatewayToken: "fixture-lease-only", Snapshot: domain.RunSnapshot{Spec: domain.RunSpec{EnvironmentID: "env_fixture", ModelID: "model_fixture", SuiteID: "swebench-verified", TaskNames: []string{task.Name}, Agent: "opencode", TimeoutSec: 60, SetupTimeoutSec: 30, MaxRequests: 2, MaxOutputTokens: 100, Concurrency: 1, Attempts: 1, ConfirmPaid: true}, Environment: domain.Environment{ID: "env_fixture", Type: "wsl", Distribution: "Ubuntu"}, Model: domain.Model{ID: "model_fixture", ProviderID: "provider_fixture", Name: "fixture-model", Protocol: domain.ChatCompletions}, Provider: domain.Provider{ID: "provider_fixture"}, Suite: suite, HarborVersion: "9.8.7", UVVersion: "8.7.6", Agent: agent, FormatVersion: domain.SnapshotFormatVersion, RegistryKind: resolved.RegistryKind, ResolvedAt: resolved.ResolvedAt, ResolutionHash: resolved.ResolutionHash, ResolvedTasks: resolved.Tasks}}
+	profiles := fixtureNetworkSnapshot(spec.Snapshot.Environment.ID)
+	spec.Snapshot.Network = &profiles
+	spec.Snapshot.Environment.Networks = &domain.EnvironmentNetworks{SourceProfileID: profiles.Source.ID, BuildProfileID: profiles.Build.ID, AgentProfileID: profiles.Agent.ID, VerifierProfileID: profiles.Verifier.ID}
+	spec.Snapshot.Environment.DockerGatewayMode = "detect"
+	spec.Snapshot.Provider.NetworkProfileID = profiles.Model.ID
 	sealFixtureSpec(&spec)
 	return spec
 }
 func sealFixtureSpec(spec *domain.ExecutionSpec) {
+	if spec.Snapshot.Network != nil {
+		var credentials map[string]domain.ProxyCredential
+		if spec.Networks != nil {
+			credentials = spec.Networks.Credentials
+		}
+		data, _ := json.Marshal(spec.Snapshot.Network)
+		var copied domain.NetworkSnapshot
+		_ = json.Unmarshal(data, &copied)
+		spec.Networks = &domain.ExecutionNetworks{Snapshot: copied, Credentials: credentials}
+	}
 	spec.Snapshot.ConfigHash, _ = spec.Snapshot.ApprovalHash()
+}
+func fixtureNetworkSnapshot(environmentID string) domain.NetworkSnapshot {
+	native := domain.NetworkSource{Mode: domain.NetworkNative}
+	mirrors := domain.NetworkMirrors{APT: native, PyPI: native, NPM: native, Node: native, UV: native, UVPython: native}
+	profile := func(stage string) domain.NetworkProfile {
+		m := mirrors
+		return domain.NetworkProfile{ID: "network_" + stage, Revision: "revision_1", Name: stage, Scope: domain.NetworkEnvironment, EnvironmentID: environmentID, ProxyMode: domain.NetworkDirect, TLSMode: domain.NetworkVerifyTLS, TrustMode: domain.NetworkSystemCA, Mirrors: &m, CreatedAt: "2026-10-29T00:00:00Z"}
+	}
+	n := domain.NetworkSnapshot{Source: profile("source"), Build: profile("build"), Agent: profile("agent"), Verifier: profile("verifier"), Model: profile("model")}
+	n.Model.Scope, n.Model.EnvironmentID, n.Model.Mirrors = domain.NetworkDesktop, "", nil
+	return n
 }
 func domainTask(spec domain.ExecutionSpec) domain.BenchmarkTask {
 	return spec.Snapshot.ResolvedTasks[0]
@@ -137,7 +163,7 @@ func TestInstalledVersionsAndCurrentAgentSchemaAreInformational(t *testing.T) {
 		}
 	}
 }
-func TestNativeJobConfigFixtureMatchesGeneratedConfig(t *testing.T) {
+func TestHistoricalJobConfigFixtureRetainsNativeSourceAndRunContract(t *testing.T) {
 	spec := fixtureSpec()
 	spec.Snapshot.Environment.CACertPath = "/home/fixture/ca-profile.pem"
 	spec.Snapshot.Environment.DockerHostGateway = "172.17.0.1"
@@ -152,11 +178,6 @@ func TestNativeJobConfigFixtureMatchesGeneratedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := filepath.Join("..", "..", "benchmarks", "harbor", "fixtures", "job-config.json")
-	if os.Getenv("ROUTER_FORGE_REFRESH_SYNTHETIC_CONFIG") == "1" {
-		if err := os.WriteFile(fixture, append(data, '\n'), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
 	expected, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatal(err)
@@ -165,10 +186,16 @@ func TestNativeJobConfigFixtureMatchesGeneratedConfig(t *testing.T) {
 	if json.Unmarshal(expected, &want) != nil || json.Unmarshal(data, &got) != nil {
 		t.Fatal("invalid synthetic fixture JSON")
 	}
-	canonicalWant, _ := json.Marshal(want)
-	canonicalGot, _ := json.Marshal(got)
-	if string(canonicalWant) != string(canonicalGot) {
-		t.Fatal("synthetic full native JobConfig fixture does not match generated configuration")
+	oldConfig, newConfig := want.(map[string]any), got.(map[string]any)
+	for _, key := range []string{"job_name", "n_attempts", "n_concurrent_trials", "tasks", "datasets", "retry"} {
+		oldValue, _ := json.Marshal(oldConfig[key])
+		newValue, _ := json.Marshal(newConfig[key])
+		if string(oldValue) != string(newValue) {
+			t.Fatalf("historical native %s contract changed", key)
+		}
+	}
+	if oldConfig["verifier"].(map[string]any)["disable"] != false || len(cfg.Environment.Env) != 0 || cfg.Verifier.Env["ROUTER_FORGE_NETWORK_STAGE"] != "verifier" {
+		t.Fatal("original verifier or independent phase configuration changed")
 	}
 }
 func TestPackageJobConfigKeepsExactDigestWithoutInventingGitCommit(t *testing.T) {

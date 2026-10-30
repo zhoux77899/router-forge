@@ -81,7 +81,7 @@ func findNative(command, configured string) (string, string) {
 	}
 	return "", "native executable not found"
 }
-func probeTool(ctx context.Context, e domain.Environment, name string, args []string) domain.ToolStatus {
+func probeTool(ctx context.Context, e domain.Environment, name string, args []string, environments ...[]string) domain.ToolStatus {
 	p, reason := findNative(name, e.Tools[name])
 	status := domain.ToolStatus{Name: name, Path: p, Detail: reason}
 	if p == "" {
@@ -89,7 +89,11 @@ func probeTool(ctx context.Context, e domain.Environment, name string, args []st
 	}
 	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	b, _, err := runCommand(probe, Command{Path: p, Args: args}, transportEnvironment(), "", nil, 32768)
+	env := transportEnvironment()
+	if len(environments) != 0 {
+		env = environments[0]
+	}
+	b, _, err := runCommand(probe, Command{Path: p, Args: args}, env, "", nil, 32768)
 	if err != nil {
 		status.Detail = "native version probe failed"
 		return status
@@ -172,8 +176,12 @@ func containsProtocol(protocols []domain.Protocol, p domain.Protocol) bool {
 	}
 	return false
 }
-func discoverAgents(ctx context.Context, e domain.Environment, harbor string) ([]domain.Agent, error) {
-	data, _, err := runCommand(ctx, Command{Path: harbor, Args: []string{"agent", "list", "--json"}}, transportEnvironment(), "", nil, 128<<10)
+func discoverAgents(ctx context.Context, e domain.Environment, harbor string, environments ...[]string) ([]domain.Agent, error) {
+	env := transportEnvironment()
+	if len(environments) != 0 {
+		env = environments[0]
+	}
+	data, _, err := runCommand(ctx, Command{Path: harbor, Args: []string{"agent", "list", "--json"}}, env, "", nil, 128<<10)
 	if err != nil {
 		return nil, errors.New("Harbor native agent list failed")
 	}
@@ -196,8 +204,8 @@ func discoverAgents(ctx context.Context, e domain.Environment, harbor string) ([
 					continue
 				}
 				probe, cancel := context.WithTimeout(ctx, 15*time.Second)
-				auth, _, aerr := runCommand(probe, Command{Path: harbor, Args: []string{"agent", "auth", name, "--json"}}, transportEnvironment(), "", nil, 128<<10)
-				schema, _, serr := runCommand(probe, Command{Path: harbor, Args: []string{"agent", "schema", name, "--json"}}, transportEnvironment(), "", nil, 128<<10)
+				auth, _, aerr := runCommand(probe, Command{Path: harbor, Args: []string{"agent", "auth", name, "--json"}}, env, "", nil, 128<<10)
+				schema, _, serr := runCommand(probe, Command{Path: harbor, Args: []string{"agent", "schema", name, "--json"}}, env, "", nil, 128<<10)
 				cancel()
 				if aerr == nil && serr == nil {
 					if parsed, err := ParseAgentCapabilities(name, auth, schema); err == nil {
@@ -205,7 +213,7 @@ func discoverAgents(ctx context.Context, e domain.Environment, harbor string) ([
 					}
 				}
 				if a.Command != "" {
-					host := probeTool(ctx, domain.Environment{}, a.Command, []string{"--version"})
+					host := probeTool(ctx, domain.Environment{}, a.Command, []string{"--version"}, env)
 					a.Path = host.Path
 					a.Installed = host.Available
 					a.Version = host.Version
@@ -309,6 +317,12 @@ func inspectDocker(ctx context.Context, docker string, requested string) (string
 func (w *nativeWorker) Inspect(ctx context.Context, e domain.Environment) (domain.Inspection, error) {
 	bounded, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
+	selected, _, operationEnv, closeNetwork, err := prepareSourceOperation(bounded, e)
+	if err != nil {
+		return domain.Inspection{}, err
+	}
+	defer closeNetwork()
+	e = selected
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return domain.Inspection{}, errors.New("execution-host home directory is unavailable")
@@ -319,7 +333,7 @@ func (w *nativeWorker) Inspect(ctx context.Context, e domain.Environment) (domai
 	}
 	result := domain.Inspection{EnvironmentID: e.ID, OS: runtime.GOOS, Arch: runtime.GOARCH, HomeDir: home, WorkDir: workDir, Ready: true, Tools: []domain.ToolStatus{}, Agents: []domain.Agent{}, Issues: []string{}}
 	for _, name := range []string{"docker", "uv", "harbor"} {
-		status := probeTool(bounded, e, name, []string{"--version"})
+		status := probeTool(bounded, e, name, []string{"--version"}, operationEnv)
 		result.Tools = append(result.Tools, status)
 		if !status.Available {
 			result.Ready = false
@@ -336,11 +350,11 @@ func (w *nativeWorker) Inspect(ctx context.Context, e domain.Environment) (domai
 		}
 	}
 	if harbor.Available {
-		if err := checkNativeHarborCapabilities(bounded, e, harbor.Path); err != nil {
+		if err := checkNativeHarborCapabilities(bounded, e, harbor.Path, operationEnv); err != nil {
 			result.Ready = false
 			result.Issues = append(result.Issues, err.Error())
 		}
-		agents, agentErr := discoverAgents(bounded, e, harbor.Path)
+		agents, agentErr := discoverAgents(bounded, e, harbor.Path, operationEnv)
 		if agentErr != nil {
 			result.Ready = false
 			result.Issues = append(result.Issues, "Harbor agent capability inspection failed")
@@ -353,7 +367,8 @@ func (w *nativeWorker) Inspect(ctx context.Context, e domain.Environment) (domai
 		result.Issues = append(result.Issues, "first-release SWE-bench native Linux Harbor support is not verified on "+runtime.GOOS+"; use a Linux WSL/SSH worker")
 	}
 	if docker.Available {
-		gateway, dockerErr := inspectDocker(bounded, docker.Path, e.DockerHostGateway)
+		gateway, observation, dockerErr := inspectDockerNetwork(bounded, docker.Path, e.DockerGatewayMode, e.DockerHostGateway)
+		result.DockerNetwork = observation
 		if dockerErr != nil {
 			result.Ready = false
 			result.Issues = append(result.Issues, dockerErr.Error())
@@ -361,6 +376,9 @@ func (w *nativeWorker) Inspect(ctx context.Context, e domain.Environment) (domai
 			result.DockerGateway = gateway
 		}
 	}
+	result = privateInspection(result, func(value string) string {
+		return redactCommandText(value, workerCommand{NetworkRuntime: e.NetworkRuntime})
+	})
 	if bounded.Err() != nil {
 		return result, bounded.Err()
 	}

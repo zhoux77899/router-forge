@@ -128,6 +128,9 @@ func ValidateExecutionSpec(spec domain.ExecutionSpec) error {
 	if err := spec.Snapshot.ValidateSources(); err != nil {
 		return err
 	}
+	if err := validateExecutionNetworks(spec); err != nil {
+		return err
+	}
 	if !validText(spec.GatewayToken) || len(spec.GatewayToken) < 8 || len(spec.GatewayToken) > 512 || strings.ContainsAny(spec.GatewayToken, " \t") {
 		return errors.New("bounded attempt lease token is required")
 	}
@@ -237,7 +240,18 @@ func profileEnv(e domain.Environment, relayHost, relayIP string, container bool)
 	}
 	out["NO_PROXY"] = noProxy
 	out["no_proxy"] = noProxy
-	if e.CACertPath != "" {
+	if e.SkipTLSVerification {
+		out["ROUTER_FORGE_SKIP_TLS_VERIFICATION"] = "1"
+		out["GIT_SSL_NO_VERIFY"] = "true"
+		out["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
+		out["npm_config_strict_ssl"] = "false"
+		out["UV_INSECURE_HOST"] = "*"
+		if container {
+			out["CURL_HOME"] = containerTLSDir
+			out["WGETRC"] = containerTLSDir + "/wgetrc"
+			out["PYTHONPATH"] = containerTLSDir + "/python"
+		}
+	} else if e.CACertPath != "" {
 		certificate := e.CACertPath
 		if container {
 			certificate = "/etc/router-forge/ca.pem"
@@ -253,6 +267,9 @@ func profileEnv(e domain.Environment, relayHost, relayIP string, container bool)
 	return out
 }
 func BuildHarborJobConfig(spec domain.ExecutionSpec, task domain.BenchmarkTask, relayRoot, jobsDir, composePath string) (HarborJobConfig, error) {
+	return buildHarborJobConfig(spec, task, relayRoot, jobsDir, composePath, nil)
+}
+func buildHarborJobConfig(spec domain.ExecutionSpec, task domain.BenchmarkTask, relayRoot, jobsDir, composePath string, network *harborExecutionNetwork) (HarborJobConfig, error) {
 	if err := ValidateExecutionSpec(spec); err != nil {
 		return HarborJobConfig{}, err
 	}
@@ -279,11 +296,21 @@ func BuildHarborJobConfig(spec domain.ExecutionSpec, task domain.BenchmarkTask, 
 	if spec.Snapshot.Runtime != nil && spec.Snapshot.Runtime.DockerGateway != "" {
 		gateway = spec.Snapshot.Runtime.DockerGateway
 	}
-	env := profileEnv(spec.Snapshot.Environment, endpoint.Hostname(), gateway, true)
-	mounts := []HarborMount{}
-	if spec.Snapshot.Environment.CACertPath != "" {
-		mounts = append(mounts, HarborMount{Type: "bind", Source: spec.Snapshot.Environment.CACertPath, Target: "/etc/router-forge/ca.pem", ReadOnly: true})
+	if network == nil {
+		root := filepath.Dir(jobsDir)
+		if strings.HasPrefix(jobsDir, "/") {
+			root = path.Dir(jobsDir)
+		}
+		var err error
+		network, err = staticExecutionNetwork(spec, root, gateway)
+		if err != nil {
+			return HarborJobConfig{}, err
+		}
 	}
+	if network.Source == nil || network.Build == nil || network.Agent == nil || network.Verifier == nil {
+		return HarborJobConfig{}, errors.New("phase network configuration is incomplete")
+	}
+	mounts := append(append([]HarborMount{}, network.Agent.Mounts...), network.Verifier.Mounts...)
 	downloadDir := filepath.Join(filepath.Dir(jobsDir), "task-cache")
 	if strings.HasPrefix(jobsDir, "/") {
 		downloadDir = path.Join(path.Dir(jobsDir), "task-cache")
@@ -304,9 +331,9 @@ func BuildHarborJobConfig(spec domain.ExecutionSpec, task domain.BenchmarkTask, 
 	cfg := HarborJobConfig{
 		JobName: spec.JobName, JobsDir: jobsDir, NAttempts: 1, InstallOnly: false, SkipCredentialChecks: false, TimeoutMultiplier: 1, NConcurrentTrials: 1, Quiet: true,
 		Retry:       HarborRetryConfig{MaxRetries: 0, ExcludeExceptions: []string{}, WaitMultiplier: 1, MinWaitSec: 1, MaxWaitSec: 60},
-		Environment: HarborEnvironmentConfig{Type: "docker", Delete: true, CPUEnforcementPolicy: "auto", MemoryEnforcementPolicy: "auto", Mounts: mounts, ExtraDockerCompose: []string{composePath}, Env: env, Kwargs: map[string]any{}, ExtraAllowedHosts: []string{}},
-		Verifier:    HarborVerifierConfig{Disable: false, Env: env, Kwargs: map[string]any{}, ExtraAllowedHosts: []string{}}, Metrics: []any{},
-		Agents:   []HarborAgentConfig{{Name: agent.Name, ModelName: modelSelector, BaseURL: baseURL, ModelAPIKeyName: attemptKeyName, ModelAPIFormat: harborAPIFormat(spec.Snapshot.Model.Protocol), SkipModelParsing: true, NConcurrent: 1, OverrideTimeoutSec: run.TimeoutSec, OverrideSetupTimeoutSec: run.SetupTimeoutSec, MaxTimeoutSec: run.TimeoutSec, Skills: []string{}, ExtraAllowedHosts: []string{endpoint.Hostname()}, Kwargs: kwargs, Env: env, MCPServers: []any{}}},
+		Environment: HarborEnvironmentConfig{Type: "docker", Delete: true, CPUEnforcementPolicy: "auto", MemoryEnforcementPolicy: "auto", Mounts: mounts, ExtraDockerCompose: []string{composePath}, Env: map[string]string{}, Kwargs: map[string]any{}, ExtraAllowedHosts: []string{}},
+		Verifier:    HarborVerifierConfig{Disable: false, Env: network.Verifier.Env, Kwargs: map[string]any{}, ExtraAllowedHosts: []string{}}, Metrics: []any{},
+		Agents:   []HarborAgentConfig{{Name: agent.Name, ModelName: modelSelector, BaseURL: baseURL, ModelAPIKeyName: attemptKeyName, ModelAPIFormat: harborAPIFormat(spec.Snapshot.Model.Protocol), SkipModelParsing: true, NConcurrent: 1, OverrideTimeoutSec: run.TimeoutSec, OverrideSetupTimeoutSec: run.SetupTimeoutSec, MaxTimeoutSec: run.TimeoutSec, Skills: []string{}, ExtraAllowedHosts: []string{endpoint.Hostname()}, Kwargs: kwargs, Env: network.Agent.Env, MCPServers: []any{}}},
 		Datasets: []any{}, Tasks: []HarborTaskConfig{reference},
 		Artifacts: []any{}, ExtraInstructionPaths: []string{}, ExtraInstructions: []string{}, SourceJobs: []any{},
 	}

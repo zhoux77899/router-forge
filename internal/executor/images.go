@@ -243,7 +243,12 @@ func taskImageTag(spec domain.ExecutionSpec) string {
 }
 func composeOverlay(spec domain.ExecutionSpec, owner, bindIP, image, pinnedDockerfile string) ([]byte, error) {
 	labels := map[string]string{"io.router-forge.owner": owner, "io.router-forge.run": spec.RunID, "io.router-forge.attempt": spec.AttemptID}
-	main := map[string]any{"labels": labels, "extra_hosts": map[string]string{"router-forge-gateway": bindIP}, "image": image}
+	mainLabels := map[string]string{}
+	for key, value := range labels {
+		mainLabels[key] = value
+	}
+	mainLabels["io.router-forge.network.stage"] = "agent"
+	main := map[string]any{"labels": mainLabels, "extra_hosts": map[string]string{"router-forge-gateway": bindIP}, "image": image}
 	if pinnedDockerfile != "" {
 		main["build"] = map[string]string{"dockerfile": pinnedDockerfile}
 	}

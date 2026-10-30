@@ -84,7 +84,7 @@ func profileClient(e domain.Environment) (*http.Client, error) {
 	if err != nil {
 		roots = x509.NewCertPool()
 	}
-	if e.CACertPath != "" {
+	if e.CACertPath != "" && !e.SkipTLSVerification {
 		if !validText(e.CACertPath) || strings.HasSuffix(strings.ToLower(e.CACertPath), ".env") {
 			return nil, errors.New("invalid CA certificate path")
 		}
@@ -100,7 +100,7 @@ func profileClient(e domain.Environment) (*http.Client, error) {
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
-	tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}
+	tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, InsecureSkipVerify: e.SkipTLSVerification}
 	if e.ProxyURL != "" {
 		proxy, err := url.Parse(e.ProxyURL)
 		if err != nil || (proxy.Scheme != "http" && proxy.Scheme != "https") || proxy.Hostname() == "" || proxy.RawQuery != "" || proxy.Fragment != "" || !validText(e.ProxyURL) {

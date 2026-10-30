@@ -20,10 +20,7 @@ func TestInstalledHarborCurrentSourceAndExactMaterialization(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	environment := domain.Environment{
-		ID: "native-source-fixture", Type: "local", CACertPath: os.Getenv("ROUTER_FORGE_HARBOR_CA"),
-		ProxyURL: os.Getenv("ROUTER_FORGE_HARBOR_PROXY"), NoProxy: os.Getenv("ROUTER_FORGE_HARBOR_NO_PROXY"),
-	}
+	environment := selectedNativeSourceFixture(t, domain.Environment{ID: "native-source-fixture", Type: "local"})
 	worker := newNativeWorker(nil)
 	resolved, err := worker.Resolve(ctx, environment, domain.SWEBenchVerified())
 	if err != nil {
@@ -46,17 +43,20 @@ func TestInstalledHarborCurrentSourceAndExactMaterialization(t *testing.T) {
 	if selected == nil {
 		t.Fatalf("requested canonical task %q is absent; no substitution is allowed", requested)
 	}
-	tools := probeTool(ctx, environment, "harbor", []string{"--version"})
+	_, source, processEnv, closeNetwork, err := prepareSourceOperation(ctx, environment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeNetwork()
+	tools := probeTool(ctx, environment, "harbor", []string{"--version"}, processEnv)
 	if !tools.Available {
 		t.Fatal("installed Harbor version probe failed")
 	}
-	root := t.TempDir()
-	for _, name := range []string{"home", "scratch"} {
-		if err := privateDir(filepath.Join(root, name)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	materialized, err := materializeHarborTask(ctx, environment, tools.Path, *selected, filepath.Join(root, "task-cache"), nativeProcessEnv(environment, root, ""))
+	tools = privateToolStatuses([]domain.ToolStatus{tools}, func(value string) string {
+		return redactCommandText(value, workerCommand{NetworkRuntime: environment.NetworkRuntime})
+	})[0]
+	root := filepath.Dir(filepath.Dir(source.directory))
+	materialized, err := materializeHarborTask(ctx, environment, tools.Path, *selected, filepath.Join(root, "task-cache"), processEnv)
 	if err != nil {
 		t.Fatal("exact native task materialization failed:", err)
 	}
@@ -73,12 +73,14 @@ func TestInstalledHarborCurrentSourceAndExactMaterialization(t *testing.T) {
 		t.Fatal("original task metadata is unsupported:", err)
 	}
 	metadataHash := sha256.Sum256(metadata)
-	evidence := map[string]any{"verification": "native_source_and_exact_task_download", "model_inference": false, "benchmark_scores": nil, "dataset": resolved.Suite.Dataset, "dataset_version": resolved.Suite.Version, "dataset_digest": resolved.DatasetDigest, "dataset_revision": resolved.DatasetRevision, "registry_url": resolved.Suite.RegistryURL, "registry_metadata_url": resolved.RegistryMetadataURL, "registry_kind": resolved.RegistryKind, "resolution_hash": resolved.ResolutionHash, "task_count": len(resolved.Tasks), "resolved_at": resolved.ResolvedAt, "task": *selected, "materialized_name": materialized.Name, "trial_prefix": materialized.TrialPrefix, "task_metadata_sha256": hex.EncodeToString(metadataHash[:]), "original_image": parsed.Image, "build_timeout_sec": parsed.BuildTimeoutSec, "verifier_mode": parsed.VerifierMode, "harbor": tools, "ca_profile": environment.CACertPath}
+	evidence := map[string]any{"verification": "native_source_and_exact_task_download", "model_inference": false, "benchmark_scores": nil, "dataset": resolved.Suite.Dataset, "dataset_version": resolved.Suite.Version, "dataset_digest": resolved.DatasetDigest, "dataset_revision": resolved.DatasetRevision, "registry_url": resolved.Suite.RegistryURL, "registry_metadata_url": resolved.RegistryMetadataURL, "registry_kind": resolved.RegistryKind, "resolution_hash": resolved.ResolutionHash, "task_count": len(resolved.Tasks), "resolved_at": resolved.ResolvedAt, "task": *selected, "materialized_name": materialized.Name, "trial_prefix": materialized.TrialPrefix, "task_metadata_sha256": hex.EncodeToString(metadataHash[:]), "original_image": parsed.Image, "build_timeout_sec": parsed.BuildTimeoutSec, "verifier_mode": parsed.VerifierMode, "harbor": tools, "network": environment.NetworkRuntime.Snapshot, "source_ca_sha256": source.CASHA256}
+	evidence["network_evidence_kind"] = "exact_source_download_not_container_or_model_trial"
 	data, _ := json.MarshalIndent(evidence, "", "  ")
 	t.Log(string(data))
 	if filename := os.Getenv("ROUTER_FORGE_NATIVE_SOURCE_EVIDENCE"); filename != "" {
-		if !filepath.IsAbs(filename) {
-			t.Fatal("evidence path must be absolute")
+		cwd, err := os.Getwd()
+		if err != nil || !filepath.IsAbs(filename) || !pathWithin(cwd, filename) {
+			t.Fatal("evidence path must be absolute inside the owned test working directory")
 		}
 		if err := os.WriteFile(filename, data, 0600); err != nil {
 			t.Fatal(err)

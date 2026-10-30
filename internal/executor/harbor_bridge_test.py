@@ -299,7 +299,7 @@ class HarborBridgeTests(unittest.TestCase):
             mount = {"type": "bind", "source": str(self.root / "ca.pem"), "target": "/etc/router-forge/ca.pem", "read_only": True}
             environment["mounts"] = [mount]
             environment["kwargs"]["mounts"] = [mount]
-            env.update({key: "/etc/router-forge/ca.pem" for key in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE")})
+            env.update({key: "/etc/router-forge/ca.pem" for key in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO")})
             env["UV_NATIVE_TLS"] = "true"
         task = {"name": "fixture/task", "ref": "sha256:" + TASK_SHA, "overwrite": False, "download_dir": str(self.root / "download"), "source": bridge.DATASET}
         if kind == "git":
@@ -473,6 +473,40 @@ class HarborBridgeTests(unittest.TestCase):
         for agent, skip_credentials in self.stubs.preflight_calls:
             self.assertTrue(agent["skip_model_parsing"])
             self.assertFalse(skip_credentials)
+
+    def test_tls_skip_requires_matching_explicit_native_contract(self):
+        request, raw, _path = self.job_request()
+        request["skip_tls_verification"] = True
+        request["ca_cert_path"] = str(self.root / "missing-retained-ca.pem")
+        env = raw["environment"]["env"]
+        env.update({"ROUTER_FORGE_SKIP_TLS_VERIFICATION": "1", "GIT_SSL_NO_VERIFY": "true", "NODE_TLS_REJECT_UNAUTHORIZED": "0", "npm_config_strict_ssl": "false", "UV_INSECURE_HOST": "*", "CURL_HOME": "/etc/router-forge/tls", "WGETRC": "/etc/router-forge/tls/wgetrc", "PYTHONPATH": "/etc/router-forge/tls/python"})
+        mount = {"type": "bind", "source": str(self.root / "tls"), "target": "/etc/router-forge/tls", "read_only": True}
+        raw["environment"]["mounts"] = [mount]
+        raw["environment"]["kwargs"]["mounts"] = [mount]
+        bridge.validate_contract(raw, request)
+        for change in (
+            lambda config: config["environment"]["env"].pop("GIT_SSL_NO_VERIFY"),
+            lambda config: config["environment"]["env"].update(SSL_CERT_FILE="/missing/ca.pem"),
+            lambda config: config["environment"]["mounts"][0].update(read_only=False),
+            lambda config: config["environment"]["mounts"].append({"type": "bind", "source": request["ca_cert_path"], "target": "/etc/router-forge/ca.pem", "read_only": True}),
+        ):
+            config = copy.deepcopy(raw)
+            change(config)
+            with self.assertRaises(bridge.BridgeError):
+                bridge.validate_contract(config, request)
+        with self.assertRaises(bridge.BridgeError):
+            bridge.validate_contract(raw, {**request, "skip_tls_verification": False})
+
+    def test_tls_policy_is_typed_scoped_and_cannot_be_silently_ignored(self):
+        code, response = self.call({"operation": "capabilities", "skip_tls_verification": "false"})
+        self.assertEqual((code, response["error_code"]), (1, "invalid_request"))
+        with patch.object(bridge, "apply_tls_policy") as apply:
+            code, response = self.call({"operation": "capabilities", "skip_tls_verification": True})
+            self.assertEqual(code, 0, response)
+            apply.assert_called_once_with(True)
+        with patch.object(bridge, "apply_tls_policy", side_effect=bridge.UnsupportedTLSPolicy("secret=hidden")):
+            code, response = self.call({"operation": "capabilities", "skip_tls_verification": True})
+            self.assertEqual((code, response["error_code"]), (1, "unsupported_tls"))
 
     def test_schema_and_expansion_must_honor_routing_overlay_kwargs_task_and_verifier(self):
         for stage, field in (("drop_parsed", ("agents", "base_url")), ("drop_parsed", ("agents", "kwargs")), ("drop_parsed", ("environment", "extra_docker_compose")), ("drop_trial", ("agent", "model_api_format")), ("drop_trial", ("environment", "env")), ("drop_trial", ("environment", "kwargs")), ("drop_trial", ("verifier", "disable")), ("drop_trial", ("task", "ref"))):

@@ -29,22 +29,25 @@ const maxModelStreams = 8
 var ErrWorkerConnection = errors.New("worker connection lost; work was interrupted and was not restarted")
 
 type workerCommand struct {
-	ID          string                `json:"id"`
-	Kind        string                `json:"kind"`
-	Target      string                `json:"target,omitempty"`
-	Environment domain.Environment    `json:"environment"`
-	Suite       *domain.Suite         `json:"suite,omitempty"`
-	Spec        *domain.ExecutionSpec `json:"spec,omitempty"`
-	MockImageID string                `json:"mock_image_id,omitempty"`
+	ID               string                    `json:"id"`
+	Kind             string                    `json:"kind"`
+	Target           string                    `json:"target,omitempty"`
+	Environment      domain.Environment        `json:"environment"`
+	Suite            *domain.Suite             `json:"suite,omitempty"`
+	Spec             *domain.ExecutionSpec     `json:"spec,omitempty"`
+	MockImageID      string                    `json:"mock_image_id,omitempty"`
+	NetworkRuntime   *domain.ExecutionNetworks `json:"network_runtime,omitempty"`
+	NetworkOperation *domain.NetworkOperation  `json:"network_operation,omitempty"`
 }
 type commandReply struct {
-	ID         string                    `json:"id"`
-	Error      string                    `json:"error,omitempty"`
-	Inspection *domain.Inspection        `json:"inspection,omitempty"`
-	Tasks      []domain.BenchmarkTask    `json:"tasks,omitempty"`
-	Resolved   *domain.ResolvedBenchmark `json:"resolved,omitempty"`
-	Result     *domain.ExecutionResult   `json:"result,omitempty"`
-	MockResult *mockIntegrationResult    `json:"mock_result,omitempty"`
+	ID           string                    `json:"id"`
+	Error        string                    `json:"error,omitempty"`
+	Inspection   *domain.Inspection        `json:"inspection,omitempty"`
+	Tasks        []domain.BenchmarkTask    `json:"tasks,omitempty"`
+	Resolved     *domain.ResolvedBenchmark `json:"resolved,omitempty"`
+	Result       *domain.ExecutionResult   `json:"result,omitempty"`
+	MockResult   *mockIntegrationResult    `json:"mock_result,omitempty"`
+	NetworkCheck *domain.NetworkCheck      `json:"network_check,omitempty"`
 }
 
 type observationReply struct {
@@ -67,6 +70,7 @@ type pendingCommand struct {
 	emit        func(domain.WorkerEvent)
 	observe     func(domain.ExecutionObservation) error
 	token       string
+	redact      func(string) string
 	execute     bool
 	spec        *domain.ExecutionSpec
 	ctx         context.Context
@@ -117,6 +121,7 @@ func environmentFingerprint(e domain.Environment) string {
 }
 
 func (m *Manager) getSession(ctx context.Context, e domain.Environment) (*workerSession, error) {
+	e = clearLegacyNetwork(publicEnvironment(e))
 	if err := validateEnvironment(e); err != nil {
 		return nil, err
 	}
@@ -291,6 +296,31 @@ func (m *Manager) Tasks(ctx context.Context, e domain.Environment, suite domain.
 	resolved, err := m.Resolve(ctx, e, suite)
 	return resolved.Tasks, err
 }
+func (m *Manager) CheckNetwork(ctx context.Context, e domain.Environment, operation domain.NetworkOperation) (domain.NetworkCheck, error) {
+	if err := operation.Profile.ValidateSaved(); err != nil {
+		return domain.NetworkCheck{}, err
+	}
+	if operation.Profile.Scope != domain.NetworkEnvironment || operation.Profile.EnvironmentID != e.ID || !domain.ValidNetworkURL(operation.TargetURL, false) {
+		return domain.NetworkCheck{}, errors.New("network check requires the selected execution host and an explicit safe target URL")
+	}
+	data, err := json.Marshal(operation)
+	if err != nil || len(data) > maxControlBody/2 {
+		return domain.NetworkCheck{}, errors.New("private network check exceeded its limit")
+	}
+	var copied domain.NetworkOperation
+	if json.Unmarshal(data, &copied) != nil {
+		return domain.NetworkCheck{}, errors.New("invalid private network check")
+	}
+	r, err := m.request(ctx, e, workerCommand{Kind: "check-network", Environment: e, NetworkOperation: &copied}, nil)
+	if err != nil {
+		return domain.NetworkCheck{}, err
+	}
+	if r.NetworkCheck == nil || r.NetworkCheck.ProfileID != operation.Profile.ID || r.NetworkCheck.ProfileRevision != operation.Profile.Revision || r.NetworkCheck.TargetURL != operation.TargetURL {
+		return domain.NetworkCheck{}, errors.New("worker returned inconsistent network check evidence")
+	}
+	return *r.NetworkCheck, nil
+}
+
 func (m *Manager) Execute(ctx context.Context, e domain.Environment, spec domain.ExecutionSpec, emit func(domain.WorkerEvent), observe func(domain.ExecutionObservation) error) (domain.ExecutionResult, error) {
 	if observe == nil {
 		return infrastructureResult("durable execution observation sink is required", ""), errors.New("durable execution observation sink is required")
@@ -317,12 +347,32 @@ func (m *Manager) request(ctx context.Context, e domain.Environment, command wor
 	if err := ctx.Err(); err != nil {
 		return commandReply{}, err
 	}
+	if command.Kind != "execute" && command.Kind != "verify-mock" && command.Kind != "check-network" {
+		var err error
+		command.NetworkRuntime, err = privateCommandNetworks(e)
+		if err != nil {
+			return commandReply{}, err
+		}
+	}
+	command.Environment = publicEnvironment(command.Environment)
+	if command.Spec != nil {
+		data, err := json.Marshal(command.Spec)
+		if err != nil || len(data) > maxControlBody {
+			return commandReply{}, errors.New("private execution command exceeded its limit")
+		}
+		var copied domain.ExecutionSpec
+		if json.Unmarshal(data, &copied) != nil {
+			return commandReply{}, errors.New("invalid private execution command")
+		}
+		command.Spec = &copied
+	}
 	s, err := m.getSession(ctx, e)
 	if err != nil {
 		return commandReply{}, err
 	}
 	command.ID = domain.NewID("cmd")
 	p := &pendingCommand{reply: make(chan commandReply, 1), emit: emit, execute: command.Kind == "execute" || command.Kind == "verify-mock", spec: command.Spec, ctx: ctx}
+	p.redact = func(value string) string { return redactCommandText(value, command) }
 	p.agentReady.Store(command.Kind != "execute")
 	if len(observations) > 0 {
 		p.observe = observations[0]
@@ -464,7 +514,20 @@ func (s *workerSession) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			p.completed = true
 			p.agentReady.Store(false)
 			p.observation.Unlock()
-			if p.token != "" {
+			if p.redact != nil {
+				result.Error = p.redact(result.Error)
+				if result.Result != nil {
+					*result.Result = privateExecutionResult(*result.Result, p.redact)
+				}
+				if result.Inspection != nil {
+					*result.Inspection = privateInspection(*result.Inspection, p.redact)
+				}
+				if result.NetworkCheck != nil {
+					for i, issue := range result.NetworkCheck.Issues {
+						result.NetworkCheck.Issues[i] = p.redact(issue)
+					}
+				}
+			} else if p.token != "" {
 				result.Error = strings.ReplaceAll(result.Error, p.token, "[redacted]")
 				if result.Result != nil {
 					result.Result.Error = strings.ReplaceAll(result.Result.Error, p.token, "[redacted]")
@@ -503,6 +566,7 @@ func (s *workerSession) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "execution observation contains a private token", http.StatusBadRequest)
 			return
 		}
+		value.Observation = privateObservation(p.spec, value.Observation)
 		next, err := domain.CloneSnapshot(p.spec.Snapshot)
 		if err != nil || next.ApplyObservation(value.Observation) != nil {
 			http.Error(w, "observation cannot alter or replace the active execution snapshot", http.StatusBadRequest)
@@ -529,6 +593,9 @@ func (s *workerSession) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !simpleName.MatchString(event.Event.Kind) {
 				http.Error(w, "invalid event kind", 400)
 				return
+			}
+			if p.redact != nil {
+				event.Event.Message = p.redact(event.Event.Message)
 			}
 			event.Event.Message = redactedMessage(event.Event.Message, p.token)
 			if event.Event.Timestamp == "" {

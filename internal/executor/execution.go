@@ -18,6 +18,9 @@ import (
 )
 
 func nativeProcessEnv(e domain.Environment, attemptDir, token string) []string {
+	if e.Networks != nil {
+		e = clearLegacyNetwork(e)
+	}
 	base := transportEnvironment()
 	out := make([]string, 0, len(base)+24)
 	for _, kv := range base {
@@ -48,6 +51,10 @@ func nativeProcessEnv(e domain.Environment, attemptDir, token string) []string {
 	}
 	for key, value := range profileEnv(e, "router-forge-gateway", e.DockerHostGateway, false) {
 		out = append(out, key+"="+value)
+	}
+	if e.SkipTLSVerification {
+		directory := tlsProfileDir(attemptDir)
+		out = append(out, "CURL_HOME="+directory, "WGETRC="+filepath.Join(directory, "wgetrc"), "PYTHONPATH="+filepath.Join(directory, "python"))
 	}
 	return out
 }
@@ -92,6 +99,11 @@ func reserveAttempt(workDir string, spec domain.ExecutionSpec) (string, error) {
 			return "", err
 		}
 	}
+	if spec.Snapshot.Network == nil && spec.Snapshot.Environment.SkipTLSVerification {
+		if err := writeTLSProfile(attemptDir); err != nil {
+			return "", err
+		}
+	}
 	return attemptDir, nil
 }
 func lifecycle(emit func(domain.WorkerEvent), kind, message string) {
@@ -110,16 +122,24 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 		err := errors.New("a new execution requires durable observation acknowledgments and cannot resume an observed attempt")
 		return infrastructureResult(err.Error(), ""), err
 	}
-	if environmentFingerprint(e) != environmentFingerprint(spec.Snapshot.Environment) {
+	if environmentFingerprint(publicEnvironment(e)) != environmentFingerprint(publicEnvironment(spec.Snapshot.Environment)) {
 		err := errors.New("execution environment differs from the approved run configuration")
 		return infrastructureResult(err.Error(), ""), err
 	}
+	e.NetworkRuntime = spec.Networks
+	redact := func(value string) string { return redactCommandText(value, workerCommand{Spec: &spec}) }
+	defer func() {
+		out = privateExecutionResult(out, redact)
+		if executionErr != nil && redact(executionErr.Error()) != executionErr.Error() {
+			executionErr = errors.New(redact(executionErr.Error()))
+		}
+	}()
 	lifecycle(emit, "inspecting", "Checking installed native tools and current agent capabilities")
 	inspection, err := w.Inspect(ctx, e)
 	if err != nil {
 		return infrastructureResult("execution environment inspection failed", ""), err
 	}
-	if err := recordObservation(&spec.Snapshot, observe, domain.ExecutionObservation{Kind: "tools", Timestamp: domain.Now(), Tools: inspection.Tools, WorkDir: inspection.WorkDir, DockerGateway: inspection.DockerGateway}); err != nil {
+	if err := recordPrivateObservation(&spec, observe, domain.ExecutionObservation{Kind: "tools", Timestamp: domain.Now(), Tools: inspection.Tools, WorkDir: inspection.WorkDir, DockerGateway: inspection.DockerGateway}); err != nil {
 		return infrastructureResult(err.Error(), ""), err
 	}
 	if !inspection.Ready {
@@ -142,9 +162,41 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 	jobDir := filepath.Join(jobsDir, spec.JobName)
 	resultPath := filepath.Join(jobDir, "result.json")
 	task := spec.Snapshot.ResolvedTasks[0]
+	provenancePath := filepath.Join(attemptDir, "provenance.json")
+	initialProvenance := map[string]any{"snapshot_format_version": domain.SnapshotFormatVersion, "config_hash": spec.Snapshot.ConfigHash, "task": task, "runtime": spec.Snapshot.Runtime, "tools": inspection.Tools}
+	setNetworkProvenance(initialProvenance, spec.Snapshot)
+	initialBytes, _ := json.MarshalIndent(initialProvenance, "", "  ")
+	if err := writePrivate(provenancePath, initialBytes); err != nil {
+		return infrastructureResult("could not persist initial private network provenance", resultPath), err
+	}
+	lateProvenance := false
+	defer func() {
+		if !lateProvenance {
+			out = privateExecutionResult(out, redact)
+			if err := finalizeProvenance(provenancePath, initialProvenance, spec.Snapshot, out); err != nil {
+				if out.Error != "" {
+					out.Error += "; "
+				}
+				out.Error += err.Error()
+				if executionErr == nil {
+					executionErr = err
+				}
+			}
+		}
+	}()
+	owner := domain.NewID("owner")
+	networkTracker := newDockerTracker(tools["docker"], nativeProcessEnv(clearLegacyNetwork(e), attemptDir, ""), owner, attemptDir, jobDir, spec)
+	network, err := prepareExecutionNetwork(ctx, spec, attemptDir, inspection.DockerGateway, networkTracker)
+	if err != nil {
+		return infrastructureResult(err.Error(), resultPath), err
+	}
+	defer func() { network.close(); _ = os.RemoveAll(filepath.Join(attemptDir, "network")) }()
+	if _, err := runNativeHarborBridge(ctx, e, tools["harbor"], nativeBridgeRequest{Operation: "capabilities", AgentName: agent.Name, SourceNetwork: network.Source}, stageProcessEnvironment(e, attemptDir, "", network.Source)); err != nil {
+		return infrastructureResult(err.Error(), resultPath), err
+	}
 	lifecycle(emit, "resolving_task", "Downloading the exact task source recorded in the draft using installed Harbor")
 	sourceCtx, stopSource := context.WithTimeout(ctx, time.Duration(spec.Snapshot.Spec.SetupTimeoutSec)*time.Second)
-	materialized, err := materializeHarborTask(sourceCtx, e, tools["harbor"], task, filepath.Join(attemptDir, "task-cache"), nativeProcessEnv(e, attemptDir, ""))
+	materialized, err := materializeHarborTask(sourceCtx, e, tools["harbor"], task, filepath.Join(attemptDir, "task-cache"), stageProcessEnvironment(e, attemptDir, "", network.Source))
 	stopSource()
 	if err != nil {
 		return infrastructureResult(err.Error(), resultPath), err
@@ -157,7 +209,7 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 	if err != nil {
 		return infrastructureResult(err.Error(), resultPath), err
 	}
-	if err := recordObservation(&spec.Snapshot, observe, domain.ExecutionObservation{Kind: "task", Timestamp: domain.Now(), Task: &task, RegistryURL: materialized.RegistryURL, TaskPath: materialized.Path, TaskName: materialized.Name, TrialPrefix: materialized.TrialPrefix}); err != nil {
+	if err := recordPrivateObservation(&spec, observe, domain.ExecutionObservation{Kind: "task", Timestamp: domain.Now(), Task: &task, RegistryURL: materialized.RegistryURL, TaskPath: materialized.Path, TaskName: materialized.Name, TrialPrefix: materialized.TrialPrefix}); err != nil {
 		return infrastructureResult(err.Error(), resultPath), err
 	}
 	metadataBytes, err := readTaskSourceFile(materialized.Path, "task.toml", 128<<10)
@@ -175,15 +227,17 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 	duration := time.Duration(spec.Snapshot.Spec.TimeoutSec+spec.Snapshot.Spec.SetupTimeoutSec+metadata.BuildTimeoutSec+metadata.VerifierTimeoutSec+180) * time.Second
 	jobCtx, stopJob := context.WithTimeout(ctx, duration)
 	defer stopJob()
-	processEnv := nativeProcessEnv(e, attemptDir, spec.GatewayToken)
-	owner := domain.NewID("owner")
-	tracker := newDockerTracker(tools["docker"], nativeProcessEnv(e, attemptDir, ""), owner, attemptDir, jobDir, spec)
+	processEnv := stageProcessEnvironment(e, attemptDir, spec.GatewayToken, network.Source)
+	tracker := networkTracker
+	tracker.spec = spec
+	tracker.taskName, tracker.trialPrefix = materialized.Name, materialized.TrialPrefix
 	tracker.observer = func(value domain.ExecutionObservation) error {
-		return recordObservation(&spec.Snapshot, observe, value)
+		return recordPrivateObservation(&spec, observe, value)
 	}
-	provenancePath := filepath.Join(attemptDir, "provenance.json")
-	var provenance map[string]any
+	provenance := initialProvenance
+	lateProvenance = true
 	defer func() {
+		network.close()
 		version, _, _ := tracker.snapshot()
 		if version != "" {
 			out.AgentVersion = version
@@ -204,6 +258,7 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 			}
 		}
 		if provenance != nil {
+			out = privateExecutionResult(out, redact)
 			if err := finalizeProvenance(provenancePath, provenance, spec.Snapshot, out); err != nil {
 				lifecycle(emit, "provenance_incomplete", "Final execution evidence could not be persisted; acknowledged database observations remain available")
 				if out.Error != "" {
@@ -280,7 +335,7 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 	if err = writePrivate(composePath, overlay); err != nil {
 		return infrastructureResult("could not persist private native compose overlay", resultPath), err
 	}
-	cfg, err := BuildHarborJobConfig(spec, task, relay.URL, jobsDir, composePath)
+	cfg, err := buildHarborJobConfig(spec, task, relay.URL, jobsDir, composePath, network)
 	if err != nil {
 		return infrastructureResult(err.Error(), resultPath), err
 	}
@@ -290,13 +345,7 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 		if json.Unmarshal(overlay, &value) == nil {
 			main := value["services"].(map[string]any)["main"].(map[string]any)
 			build := main["build"].(map[string]any)
-			proxyArgs := map[string]string{}
-			for key, value := range profileEnv(e, "router-forge-gateway", inspection.DockerGateway, false) {
-				if strings.Contains(strings.ToLower(key), "proxy") {
-					proxyArgs[key] = value
-				}
-			}
-			build["args"] = proxyArgs
+			build["args"] = network.BuildArgs
 			encoded, _ := json.MarshalIndent(value, "", "  ")
 			if err := os.WriteFile(composePath, encoded, 0600); err != nil {
 				return infrastructureResult("could not persist native build proxy arguments", resultPath), err
@@ -310,19 +359,32 @@ func (w *nativeWorker) Execute(ctx context.Context, e domain.Environment, spec d
 	}
 	metadataHash := sha256.Sum256(metadataBytes)
 	provenance = map[string]any{"snapshot_format_version": domain.SnapshotFormatVersion, "config_hash": spec.Snapshot.ConfigHash, "tools": inspection.Tools, "uv_version": inspectionToolVersion(inspection, "uv"), "harbor_version": inspectionToolVersion(inspection, "harbor"), "registry_url": spec.Snapshot.Suite.RegistryURL, "registry_kind": spec.Snapshot.RegistryKind, "registry_metadata_url": spec.Snapshot.RegistryMetadataURL, "dataset_version": spec.Snapshot.Suite.Version, "dataset_digest": spec.Snapshot.DatasetDigest, "dataset_revision": spec.Snapshot.DatasetRevision, "resolved_at": spec.Snapshot.ResolvedAt, "resolution_hash": spec.Snapshot.ResolutionHash, "task": task, "runtime": spec.Snapshot.Runtime, "task_metadata_sha256": hex.EncodeToString(metadataHash[:]), "native_image": image, "base_digests": baseDigests, "agent_installation": "harbor_default", "agent_schema_sha256": canonicalSchema(agent.Schema), "protocol": spec.Snapshot.Model.Protocol, "relay_ip": inspection.DockerGateway}
+	setNetworkProvenance(provenance, spec.Snapshot)
+	provenance["stage_ca_sha256"] = map[string]string{"source": network.Source.CASHA256, "agent": network.Agent.CASHA256, "verifier": network.Verifier.CASHA256}
+	provenance["docker_network_observation"] = inspection.DockerNetwork
+	provenance["build_network_applicable"] = pinnedDockerfile != ""
 	provenanceBytes, _ := json.MarshalIndent(provenance, "", "  ")
-	if err = writePrivate(provenancePath, provenanceBytes); err != nil {
+	if err = replaceOwnedProvenance(provenancePath, provenanceBytes); err != nil {
 		return infrastructureResult("could not persist execution source and tool observations", resultPath), err
+	}
+	networkPath := filepath.Join(attemptDir, "network-contract.json")
+	networkBytes, _ := json.MarshalIndent(network, "", "  ")
+	if err := writePrivate(networkPath, networkBytes); err != nil {
+		return infrastructureResult("could not persist the credential-free phase network contract", resultPath), err
 	}
 	lifecycle(emit, "preflight", "Validating installed Harbor's native config and exact one-trial expansion")
 	dryCtx, stopDry := context.WithTimeout(jobCtx, 120*time.Second)
-	dryErr := validateNativeHarborJob(dryCtx, e, tools["harbor"], configPath, processEnv)
+	dryErr := validateNativeHarborJob(dryCtx, e, tools["harbor"], configPath, processEnv, network)
 	stopDry()
 	if dryErr != nil {
 		return infrastructureResult(dryErr.Error(), resultPath), dryErr
 	}
 	lifecycle(emit, "running", "Starting one native Harbor trial with original verifier and no trial retries")
-	cmd := exec.Command(tools["harbor"], "run", "--config", configPath)
+	command, err := harborNetworkRunCommand(e, tools["harbor"], configPath, networkPath)
+	if err != nil {
+		return infrastructureResult(err.Error(), resultPath), err
+	}
+	cmd := exec.Command(command.Path, command.Args...)
 	cmd.Env = processEnv
 	cmd.Dir = attemptDir
 	cmd.Stdout = io.Discard

@@ -54,24 +54,28 @@ var ErrNotFound = errors.New("not found")
 var ErrConflict = errors.New("conflict")
 
 type Environment struct {
-	ID                string            `json:"id"`
-	Name              string            `json:"name"`
-	Type              string            `json:"type"`
-	Distribution      string            `json:"distribution,omitempty"`
-	Host              string            `json:"host,omitempty"`
-	User              string            `json:"user,omitempty"`
-	Port              int               `json:"port,omitempty"`
-	IdentityFile      string            `json:"identity_file,omitempty"`
-	KnownHostsFile    string            `json:"known_hosts_file,omitempty"`
-	WorkDir           string            `json:"work_dir,omitempty"`
-	WorkerOS          string            `json:"worker_os,omitempty"`
-	WorkerArch        string            `json:"worker_arch,omitempty"`
-	Tools             map[string]string `json:"tools,omitempty"`
-	ProxyURL          string            `json:"proxy_url,omitempty"`
-	NoProxy           string            `json:"no_proxy,omitempty"`
-	CACertPath        string            `json:"ca_cert_path,omitempty"`
-	DockerHostGateway string            `json:"docker_host_gateway,omitempty"`
-	CreatedAt         string            `json:"created_at"`
+	ID                  string               `json:"id"`
+	Name                string               `json:"name"`
+	Type                string               `json:"type"`
+	Distribution        string               `json:"distribution,omitempty"`
+	Host                string               `json:"host,omitempty"`
+	User                string               `json:"user,omitempty"`
+	Port                int                  `json:"port,omitempty"`
+	IdentityFile        string               `json:"identity_file,omitempty"`
+	KnownHostsFile      string               `json:"known_hosts_file,omitempty"`
+	WorkDir             string               `json:"work_dir,omitempty"`
+	WorkerOS            string               `json:"worker_os,omitempty"`
+	WorkerArch          string               `json:"worker_arch,omitempty"`
+	Tools               map[string]string    `json:"tools,omitempty"`
+	ProxyURL            string               `json:"proxy_url,omitempty"`
+	NoProxy             string               `json:"no_proxy,omitempty"`
+	CACertPath          string               `json:"ca_cert_path,omitempty"`
+	SkipTLSVerification bool                 `json:"skip_tls_verification,omitempty"`
+	DockerHostGateway   string               `json:"docker_host_gateway,omitempty"`
+	DockerGatewayMode   string               `json:"docker_gateway_mode,omitempty"`
+	Networks            *EnvironmentNetworks `json:"networks,omitempty"`
+	NetworkRuntime      *ExecutionNetworks   `json:"-"`
+	CreatedAt           string               `json:"created_at"`
 }
 
 type ToolStatus struct {
@@ -98,33 +102,36 @@ type Agent struct {
 }
 
 type Inspection struct {
-	EnvironmentID string       `json:"environment_id"`
-	OS            string       `json:"os"`
-	Arch          string       `json:"arch"`
-	HomeDir       string       `json:"home_dir"`
-	WorkDir       string       `json:"work_dir"`
-	Ready         bool         `json:"ready"`
-	Tools         []ToolStatus `json:"tools"`
-	Agents        []Agent      `json:"agents"`
-	Issues        []string     `json:"issues"`
-	DockerGateway string       `json:"docker_gateway,omitempty"`
+	EnvironmentID string                    `json:"environment_id"`
+	OS            string                    `json:"os"`
+	Arch          string                    `json:"arch"`
+	HomeDir       string                    `json:"home_dir"`
+	WorkDir       string                    `json:"work_dir"`
+	Ready         bool                      `json:"ready"`
+	Tools         []ToolStatus              `json:"tools"`
+	Agents        []Agent                   `json:"agents"`
+	Issues        []string                  `json:"issues"`
+	DockerGateway string                    `json:"docker_gateway,omitempty"`
+	DockerNetwork *DockerNetworkObservation `json:"docker_network,omitempty"`
 }
 
 type Provider struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	BaseURL     string `json:"base_url"`
-	HasKey      bool   `json:"has_key"`
-	KeyHint     string `json:"key_hint,omitempty"`
-	KeyRevision string `json:"key_revision,omitempty"`
-	CreatedAt   string `json:"created_at"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	BaseURL          string `json:"base_url"`
+	HasKey           bool   `json:"has_key"`
+	KeyHint          string `json:"key_hint,omitempty"`
+	KeyRevision      string `json:"key_revision,omitempty"`
+	NetworkProfileID string `json:"network_profile_id,omitempty"`
+	CreatedAt        string `json:"created_at"`
 }
 
 type ProviderInput struct {
-	ID      string  `json:"id,omitempty"`
-	Name    string  `json:"name"`
-	BaseURL string  `json:"base_url"`
-	APIKey  *string `json:"api_key,omitempty"`
+	ID               string  `json:"id,omitempty"`
+	Name             string  `json:"name"`
+	BaseURL          string  `json:"base_url"`
+	APIKey           *string `json:"api_key,omitempty"`
+	NetworkProfileID *string `json:"network_profile_id,omitempty"`
 }
 
 type Pricing struct {
@@ -235,6 +242,7 @@ type RunSnapshot struct {
 	ResolvedTasks       []BenchmarkTask  `json:"resolved_tasks,omitempty"`
 	PreflightTools      []ToolStatus     `json:"preflight_tools,omitempty"`
 	Runtime             *RuntimeSnapshot `json:"runtime,omitempty"`
+	Network             *NetworkSnapshot `json:"network,omitempty"`
 }
 
 type Run struct {
@@ -355,12 +363,13 @@ type BackendInfo struct {
 }
 
 type ExecutionSpec struct {
-	RunID        string      `json:"run_id"`
-	TaskID       string      `json:"task_id"`
-	AttemptID    string      `json:"attempt_id"`
-	JobName      string      `json:"job_name"`
-	Snapshot     RunSnapshot `json:"snapshot"`
-	GatewayToken string      `json:"gateway_token"`
+	RunID        string             `json:"run_id"`
+	TaskID       string             `json:"task_id"`
+	AttemptID    string             `json:"attempt_id"`
+	JobName      string             `json:"job_name"`
+	Snapshot     RunSnapshot        `json:"snapshot"`
+	GatewayToken string             `json:"gateway_token"`
+	Networks     *ExecutionNetworks `json:"networks,omitempty"`
 }
 
 type WorkerEvent struct {

@@ -166,6 +166,7 @@ func pagination(r *http.Request) (int, int) {
 }
 
 func (s *Server) routes() {
+	s.networkRoutes()
 	s.mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		write(w, map[string]any{"version": domain.Version, "pid": os.Getpid(), "running": true})
 	})
@@ -198,6 +199,11 @@ func (s *Server) routes() {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 		defer cancel()
+		e, err = s.store.SourceEnvironment(ctx, e)
+		if err != nil {
+			problem(w, err)
+			return
+		}
 		result, err := s.executor.Inspect(ctx, e)
 		if err != nil {
 			problem(w, err)
@@ -265,6 +271,11 @@ func (s *Server) routes() {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 		defer cancel()
+		e, err = s.store.SourceEnvironment(ctx, e)
+		if err != nil {
+			problem(w, err)
+			return
+		}
 		items, err := s.executor.Tasks(ctx, e, domain.SWEBenchVerified())
 		if err != nil {
 			problem(w, err)
@@ -284,6 +295,11 @@ func (s *Server) routes() {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 		defer cancel()
+		e, err = s.store.SourceEnvironment(ctx, e)
+		if err != nil {
+			problem(w, err)
+			return
+		}
 		resolved, err := s.executor.Resolve(ctx, e, domain.SWEBenchVerified())
 		if err != nil {
 			problem(w, err)
@@ -440,5 +456,5 @@ func (s *Server) Close() error {
 	s.mu.Unlock()
 	err := s.executor.Close()
 	s.wg.Wait()
-	return err
+	return errors.Join(err, s.gateway.Close())
 }

@@ -5,6 +5,7 @@ import contextlib
 import copy
 from enum import Enum
 import importlib
+import importlib.util
 import inspect
 import json
 import math
@@ -15,6 +16,24 @@ import sys
 import tempfile
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
+
+
+if "apply_tls_policy" not in globals():
+    tls_spec = importlib.util.spec_from_file_location("router_forge_tls", Path(__file__).with_name("harbor_tls.py"))
+    tls_module = importlib.util.module_from_spec(tls_spec)
+    tls_spec.loader.exec_module(tls_module)
+    apply_tls_policy = tls_module.apply_tls_policy
+    UnsupportedTLSPolicy = tls_module.UnsupportedTLSPolicy
+
+if "configure_source_network" not in globals():
+    network_spec = importlib.util.spec_from_file_location("router_forge_network", Path(__file__).with_name("harbor_network.py"))
+    network_module = importlib.util.module_from_spec(network_spec)
+    network_spec.loader.exec_module(network_module)
+    network_module.apply_tls_policy = apply_tls_policy
+    configure_source_network = network_module.configure_source_network
+    validate_phase_contract = network_module.validate_phase_contract
+    native_network_api = network_module.native_network_api
+    UnsupportedNetworkPolicy = network_module.UnsupportedNetworkPolicy
 
 
 DATASET = "swe-bench/swe-bench-verified"
@@ -338,16 +357,38 @@ def validate_contract(raw, request):
     require(environment.get("type") == "docker" and environment.get("delete") is True and not environment.get("import_path") and isinstance(environment.get("kwargs"), dict), "invalid_job")
     require(isinstance(environment.get("extra_docker_compose"), list) and len(environment["extra_docker_compose"]) == 1 and Path(environment["extra_docker_compose"][0]).is_absolute(), "invalid_job")
     require(verifier.get("disable") is False and not verifier.get("import_path") and isinstance(verifier.get("kwargs"), dict), "invalid_job")
-    overlay = environment.get("env")
-    require(isinstance(overlay, dict) and agent.get("env") == overlay and verifier.get("env") == overlay and request["api_key_name"] not in overlay, "invalid_job")
-    for key in ("NO_PROXY", "no_proxy"):
-        require(isinstance(overlay.get(key), str) and all(host in overlay[key].split(",") for host in ("router-forge-gateway", "localhost", "127.0.0.1")), "invalid_job")
-    require(overlay["NO_PROXY"] == overlay["no_proxy"], "invalid_job")
-    ca = request.get("ca_cert_path")
-    if ca:
-        mount = {"type": "bind", "source": ca, "target": "/etc/router-forge/ca.pem", "read_only": True}
-        require(mount in environment.get("mounts", []) and mount in environment["kwargs"].get("mounts", []), "invalid_job")
-        require(all(overlay.get(k) == "/etc/router-forge/ca.pem" for k in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE")) and overlay.get("UV_NATIVE_TLS") == "true", "invalid_job")
+    overlays = (environment.get("env"), agent.get("env"), verifier.get("env"))
+    require(all(isinstance(overlay, dict) and request["api_key_name"] not in overlay for overlay in overlays), "invalid_job")
+    if request.get("network") is not None:
+        validate_phase_contract(request["network"], raw)
+    else:
+        # Historical synthetic/native configurations remain readable. New Go
+        # execution always supplies the independently frozen phase contract.
+        overlay = environment["env"]
+        require(agent["env"] == overlay and verifier["env"] == overlay, "invalid_job")
+        for key in ("NO_PROXY", "no_proxy"):
+            require(isinstance(overlay.get(key), str) and all(host in overlay[key].split(",") for host in ("router-forge-gateway", "localhost", "127.0.0.1")), "invalid_job")
+        require(overlay["NO_PROXY"] == overlay["no_proxy"], "invalid_job")
+        skip_tls = request.get("skip_tls_verification", False)
+        require(type(skip_tls) is bool, "invalid_job")
+        insecure = {"ROUTER_FORGE_SKIP_TLS_VERIFICATION": "1", "GIT_SSL_NO_VERIFY": "true", "NODE_TLS_REJECT_UNAUTHORIZED": "0", "npm_config_strict_ssl": "false", "UV_INSECURE_HOST": "*", "CURL_HOME": "/etc/router-forge/tls", "WGETRC": "/etc/router-forge/tls/wgetrc", "PYTHONPATH": "/etc/router-forge/tls/python"}
+        ca_keys = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "CURL_CA_BUNDLE", "GIT_SSL_CAINFO", "UV_NATIVE_TLS")
+        ca = request.get("ca_cert_path")
+        if skip_tls:
+            require(all(overlay.get(key) == value for key, value in insecure.items()), "invalid_job")
+            require(not any(key in overlay for key in ca_keys), "invalid_job")
+            mounts = environment.get("mounts", [])
+            require(not any(mount.get("target") == "/etc/router-forge/ca.pem" or ca and mount.get("source") == ca for mount in mounts), "invalid_job")
+            tls_mounts = [mount for mount in mounts if mount.get("target") == "/etc/router-forge/tls"]
+            require(len(tls_mounts) == 1 and tls_mounts[0].get("type") == "bind" and tls_mounts[0].get("read_only") is True and Path(tls_mounts[0].get("source", "")).is_absolute(), "invalid_job")
+            require(tls_mounts[0] in environment["kwargs"].get("mounts", []), "invalid_job")
+        else:
+            require(not any(key in overlay for key in insecure), "invalid_job")
+            require(not any(mount.get("target") == "/etc/router-forge/tls" for mount in environment.get("mounts", [])), "invalid_job")
+            if ca:
+                mount = {"type": "bind", "source": ca, "target": "/etc/router-forge/ca.pem", "read_only": True}
+                require(mount in environment.get("mounts", []) and mount in environment["kwargs"].get("mounts", []), "invalid_job")
+                require(all(overlay.get(key) == "/etc/router-forge/ca.pem" for key in ca_keys if key != "UV_NATIVE_TLS") and overlay.get("UV_NATIVE_TLS") == "true", "invalid_job")
     require(task.get("overwrite") is False and Path(task.get("download_dir", "")).is_absolute(), "invalid_job")
     if task.get("name"):
         saved = {"name": task["name"], "kind": "package", "package_name": task["name"], "ref": task.get("ref")}
@@ -367,6 +408,8 @@ async def validate_job(request, api):
     require(len(data) <= MAX_RESPONSE_BYTES, "invalid_job")
     raw = json.loads(data)
     validate_contract(raw, request)
+    if request.get("network") is not None:
+        native_network_api(raw["agents"][0]["name"])
     config = api["job"].model_validate(copy.deepcopy(raw))
     parsed = native_view(config)
     assert_honored(raw, parsed)
@@ -397,7 +440,23 @@ async def validate_job(request, api):
 
 async def dispatch(request):
     require(isinstance(request, dict) and request.get("operation") in ("resolve", "materialize", "validate", "capabilities"), "invalid_request")
+    skip_tls = request.get("skip_tls_verification", False)
+    require(type(skip_tls) is bool, "invalid_request")
+    try:
+        if request.get("source_network") is not None:
+            configure_source_network(request["source_network"])
+        else:
+            apply_tls_policy(skip_tls)
+    except UnsupportedTLSPolicy:
+        raise BridgeError("unsupported_tls") from None
+    except UnsupportedNetworkPolicy:
+        raise BridgeError("unsupported_network") from None
     api = native_api()
+    if request.get("agent_name") is not None:
+        try:
+            native_network_api(request["agent_name"])
+        except UnsupportedNetworkPolicy:
+            raise BridgeError("unsupported_network") from None
     operation = request["operation"]
     try:
         if operation == "resolve":
@@ -409,6 +468,8 @@ async def dispatch(request):
         return {"ok": True}
     except BridgeError:
         raise
+    except UnsupportedNetworkPolicy:
+        raise BridgeError("unsupported_network") from None
     except Exception:
         code = {"resolve": "resolution_failed", "materialize": "download_failed", "validate": "invalid_job"}.get(operation, "unsupported_api")
         raise BridgeError(code) from None

@@ -32,8 +32,7 @@ func TestSessionIdentityIncludesProfilesAndPreservesFrozenConnections(t *testing
 		t.Fatal("same profile started duplicate worker processes")
 	}
 	changed := env
-	changed.ProxyURL = "http://fixture-proxy.example:3128"
-	changed.NoProxy = "registry.example"
+	changed.Networks = &domain.EnvironmentNetworks{SourceProfileID: "different_source", BuildProfileID: "build", AgentProfileID: "agent", VerifierProfileID: "verifier"}
 	fresh, err := manager.Inspect(ctx, changed)
 	if err != nil {
 		t.Fatal(err)

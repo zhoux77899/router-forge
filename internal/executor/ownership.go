@@ -19,10 +19,21 @@ import (
 var dockerID = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type DockerContainer struct {
-	ID      string            `json:"id"`
-	Image   string            `json:"image"`
-	Labels  map[string]string `json:"labels"`
-	Running bool              `json:"running"`
+	ID       string                    `json:"id"`
+	Image    string                    `json:"image"`
+	Labels   map[string]string         `json:"labels"`
+	Running  bool                      `json:"running"`
+	Networks map[string]dockerEndpoint `json:"networks"`
+	Mounts   []dockerNetworkMount      `json:"mounts"`
+}
+type dockerEndpoint struct {
+	IPAddress         string `json:"IPAddress"`
+	GlobalIPv6Address string `json:"GlobalIPv6Address"`
+}
+type dockerNetworkMount struct {
+	Source      string `json:"Source"`
+	Destination string `json:"Destination"`
+	RW          bool   `json:"RW"`
 }
 
 func OwnsContainer(container DockerContainer, owner, runID, attemptID string) bool {
@@ -78,7 +89,7 @@ func (t *dockerTracker) inspect(ctx context.Context, id string) (DockerContainer
 	if !dockerID.MatchString(id) {
 		return DockerContainer{}, errors.New("invalid container ID")
 	}
-	data, err := t.command(ctx, "inspect", id, "--format", `{"id":{{json .Id}},"image":{{json .Image}},"labels":{{json .Config.Labels}},"running":{{json .State.Running}}}`)
+	data, err := t.command(ctx, "inspect", id, "--format", `{"id":{{json .Id}},"image":{{json .Image}},"labels":{{json .Config.Labels}},"running":{{json .State.Running}},"networks":{{json .NetworkSettings.Networks}},"mounts":{{json .Mounts}}}`)
 	var container DockerContainer
 	if err != nil || json.Unmarshal(data, &container) != nil || container.ID != id {
 		return container, errors.New("owned container metadata is unavailable")

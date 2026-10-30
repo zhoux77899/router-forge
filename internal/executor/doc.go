@@ -1,8 +1,9 @@
 // Package executor owns environment transports and native Harbor execution.
 //
 // New creates a backend-lifetime Manager. Inspect, Tasks and Execute reuse workers
-// by the entire immutable environment profile; editing a profile never replaces
-// a worker used by an older run snapshot. Close is for backend shutdown, not for
+// by public host connection settings and bindings, never private credentials.
+// Frozen network revisions and credentials travel only with each operation/run;
+// edits cannot change an already-queued private command. Close is for backend shutdown, not for
 // closing a Desktop window or a progress subscription. Execute never reconnects
 // and reruns an interrupted attempt. A new explicit request can reconnect, but
 // native execution rejects an already-existing attempt directory.
@@ -63,10 +64,42 @@
 // Each native process has an isolated private HOME and filtered environment, so
 // host provider/auth/SSH credentials are not copied. The scoped attempt token is
 // passed only as an environment value, not a CLI argument or JobConfig value.
-// CA profiles use read-only native mounts and container certificate paths;
-// constructor kwargs retain mounts for separate verifiers. Proxy exclusions
-// include the actual relay address/hostname. TLS verification remains enabled;
-// Docker daemon trust, global installations and services are never modified.
+// Format-3 runs require explicit frozen source/build/agent/verifier selections.
+// Public snapshots include only saved profile settings, auth presence and credential
+// revisions. Private credentials are transferred separately, execution profiles only;
+// model credentials stay on Desktop. Source-only inspection/resolution needs only
+// its selected source profile. Legacy environment transport fields remain readable
+// in historical reports but cannot override new selections or execute old drafts.
+// Source uses the installed Harbor launcher with isolated HOME, npm/pip/uv/Git/
+// curl/wget configuration and target-host trust. Custom mirrors use only supported
+// native variables and owned files; APT .list suites are supplied, never inferred.
+// Native installer/original verifier commands are checked for incompatible options.
+// Build permits only unauthenticated explicit proxy args with strict system trust;
+// Docker daemon trust, pull settings, original Dockerfile and shared configs stay
+// unchanged. Read-only Docker info observes actual mirrors/proxy, not connectivity.
+//
+// Native agent and original verifier have independent env, read-only config/CA
+// mounts and Python shims. Lifecycle hooks clear both cases of proxy/no_proxy,
+// ambient CA/TLS and client settings after image/native env merging. Verifier also
+// unsets model/attempt auth and always verifies TLS; agent skip never reaches it.
+// Selected source/agent skip ignores a retained CA path until verification returns.
+// Supported Python/HTTPX/Requests clients select phase trust per request, including
+// reused native clients. curl/wget/Git wrappers reject conflicting CLI/config flags.
+// Unsupported lifecycle/sidecar/mirror behavior fails explicitly; arbitrary task
+// clients and Docker daemon/pull/build connectivity are not claimed as verified.
+// Model upstream TLS has its own Desktop policy, while SSH stays strict.
+//
+// Basic proxy auth is injected only upstream by an operation/run-owned relay.
+// Source binds exact loopback; container stages use explicitly detected/manual
+// Docker-reachable private bind plus current immutable owned container IDs, exact
+// inspected IPs and readonly stage mounts. No subnet, LAN, NAT or unauthenticated
+// public fallback exists. Context cancellation closes listener/tunnels; configs and
+// relays are removed after the operation/run. Credentials never enter client env,
+// Harbor JSON, public observations/errors or initial/final failure provenance.
+// Provenance network_evidence_kind is frozen_configuration_not_connection_success;
+// it preserves profile scopes/revisions and stage CA hashes without asserting every
+// connection worked. CheckNetwork probes only the explicit target on the selected
+// worker and cannot imply daemon/container/image-pull success.
 //
 // Cancellation closes owned contexts/process groups or Windows Job Objects and
 // removes only revalidated project-owned immutable Docker IDs. EOF first gives
@@ -98,5 +131,14 @@
 // fixture=true and benchmark_scores=null. Normal versioned worker deployment
 // remains reusable; only owned fixture containers/processes/build files are
 // cleaned. TestReadOnlyNativeWSLInspection performs only version, capability,
-// Docker metadata and interface inspection; it executes no trial.
+// Docker metadata and interface inspection; it executes no trial. Opt-in source/
+// inspection fixtures require ROUTER_FORGE_SOURCE_PROFILE_JSON with a saved profile
+// bound to the fixture environment, optional private
+// ROUTER_FORGE_SOURCE_PROXY_CREDENTIAL_JSON, and explicit
+// ROUTER_FORGE_DOCKER_GATEWAY_MODE/detected-or-manual address where applicable.
+// ROUTER_FORGE_OFFLINE_NATIVE_NETWORK=1 enables installed Harbor schema/config
+// expansion/lifecycle checks with sockets/process execution blocked except owned
+// non-network shell/version fixtures. A separate owned-loopback TLS fixture verifies
+// reused installed HTTPX/Requests/stdlib phase clients. Neither starts a Harbor
+// trial, installs a package, invokes Docker, downloads a task or calls a model.
 package executor
