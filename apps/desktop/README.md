@@ -18,7 +18,7 @@ MyGo 隐藏标题栏模式由 App 绘制 40px 顶栏，保留系统窗口控件�
 bun run dev:desktop
 ```
 
-`mygo dev` 自动运行 app 的 `prepare:helpers`（根 `build:backend`、`build:web`），再启动 `http://127.0.0.1:5174` 的 Vite renderer。端口固定且不能占用。无需设置控制 token 或后端 URL；生成的原生绑定调用 `Console.Connect`，后端使用独立、动态 loopback 端口。
+Desktop 的 `dev` 脚本先运行 `prepare:helpers`（根 `build:backend`、`build:web`），完成后再运行 `mygo dev`，由 MyGo 启动 `http://127.0.0.1:7789` 的 Vite renderer。准备构建不占用 MyGo 等待前端服务的 30 秒启动窗口；请使用上述脚本，不要直接运行 `mygo dev` 来代替完整开发启动。Desktop renderer 预览端口为 `7791`；开发与预览端口固定且不能占用。无需设置控制 token 或后端 URL；生成的原生绑定调用 `Console.Connect`，后端使用独立、动态 loopback 端口。
 
 开发与发布均依赖现有 Windows WebView2 Runtime、Bun、Go 自动 toolchain 和固定的 `mygo-cli` 0.7.1。这里不安装系统服务、Docker 或宿主 Agent。第一版 SWE 执行不支持 Windows 原生 Harbor；使用真实检查通过的 WSL/Linux SSH 环境。工具 `harbor`、`docker`、`uv` 的路径必须属于所选执行宿主。
 

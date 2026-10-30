@@ -240,8 +240,8 @@ public snapshots, not Network management, protected configuration or credentials
 The native private API remains private. Public deployment and browser-side
 administration are not supported.
 
-For frontend development, Desktop uses `127.0.0.1:5174` and attaches through MyGo.
-The separate `bun run dev:web` server uses `127.0.0.1:5173`; set
+For frontend development, Desktop uses `127.0.0.1:7789` and attaches through MyGo.
+The separate `bun run dev:web` server uses `127.0.0.1:7790`; set
 `ROUTER_FORGE_API_URL` to the actual backend URL shown in Desktop before starting
 it. That development proxy remains read-only and does not require a control token.
 

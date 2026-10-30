@@ -11,7 +11,7 @@ $env:ROUTER_FORGE_API_URL = 'http://127.0.0.1:<Desktop 显示的实际端口>'
 bun run dev:web
 ```
 
-Web 开发服务固定绑定 `127.0.0.1:5173`。`ROUTER_FORGE_API_URL` 仅供 Vite server 的 `/api` proxy 使用；不能是远程 URL、带用户名/密码或额外路径的 URL。端口已被占用时失败，不静默换端口。未配置目标时 `/api` 返回带说明的 503，UI 不会用 mock/fixture 数据冒充结果。
+Web 开发服务固定绑定 `127.0.0.1:7790`。`ROUTER_FORGE_API_URL` 仅供 Vite server 的 `/api` proxy 使用；不能是远程 URL、带用户名/密码或额外路径的 URL。端口已被占用时失败，不静默换端口。未配置目标时 `/api` 返回带说明的 503，UI 不会用 mock/fixture 数据冒充结果。
 
 不需要、也不能在 Web 的环境变量或构建内容中注入控制 token、模型 API key 或代理凭据。后端由 Desktop 持有和管理；网页仅通过冻结的结果 GET-only facade 读取结果与批准的公共快照，不能读取 Network 管理或其他受保护配置。原生私有 API 不因 Web 同源发布而公开。
 
@@ -24,7 +24,7 @@ bun run build:web
 
 Vite 输出仓库根目录 `build\dist\index.html` 与 `build\dist\assets`，使用相对 asset 路径、不生成 sourcemap；重建只清空该专属输出目录。实际生产运行由独立本机 backend 同源提供静态 Web 和只读 `/api`；浏览器使用 `new APIClient("")`，不需要生产端口环境变量。Desktop 的 MyGo build 将此 Web dist 打包为 executable 旁的 `dist` 资源。
 
-本 app manifest 定义 `bun run preview`，固定 `127.0.0.1:4173`；预览需要上述 `ROUTER_FORGE_API_URL`，它不是独立后端或配置控制台。后台 PID 和 URL 由 Desktop 展示。
+本 app manifest 定义 `bun run preview`，固定 `127.0.0.1:7792`；预览需要上述 `ROUTER_FORGE_API_URL`，它不是独立后端或配置控制台。后台 PID 和 URL 由 Desktop 展示。
 
 ## 展示约定
 

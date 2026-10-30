@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "mygo dev",
+    "dev": "bun run prepare:helpers && mygo dev",
     "dev:renderer": "vite --host 127.0.0.1",
     "prepare:helpers": "bun run --cwd ../.. build:backend && bun run --cwd ../.. build:web",
     "build": "mygo build",

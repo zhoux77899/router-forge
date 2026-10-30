@@ -211,7 +211,7 @@ func locateBackendAt(explicitDataDir string) (backend.Options, error) {
 		return backend.Options{}, errors.New("backend helpers not found")
 	}
 	options.DataDir = dataDir
-	options.DevOrigin = "http://127.0.0.1:5173"
+	options.DevOrigin = "http://127.0.0.1:7790"
 	return options, nil
 }
 
@@ -225,6 +225,6 @@ func resourceOptions(resources, dataDir string) backend.Options {
 		ServerPath: filepath.Join(resources, "server", "router-forge-server"+suffix),
 		WorkerDir:  filepath.Join(resources, "workers"),
 		WebDir:     filepath.Join(resources, "dist"),
-		DevOrigin:  "http://127.0.0.1:5173",
+		DevOrigin:  "http://127.0.0.1:7790",
 	}
 }
