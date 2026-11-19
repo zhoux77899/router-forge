@@ -26,6 +26,11 @@ describe("network check evidence", () => {
     expect(html).toContain("CA SHA-256");
     expect(html).toContain(fingerprint);
     expect(html).toContain("break-all");
+    expect(html).toContain('aria-label="网络连接检查"'); expect(html).toContain("table-fixed");
+    const table = html.match(/<table\b[^>]*>[\s\S]*?<\/table>/)?.[0];
+    expect(table).toBeDefined(); expect(table).not.toMatch(/overflow-x|whitespace-nowrap|truncate|min-w-\[(?:\d+)/);
+    expect(table).toContain("whitespace-normal"); expect(table).toContain("[overflow-wrap:anywhere]");
+    expect(table).toContain("HTTP"); expect(table).toContain("TLS 证书"); expect(table).toContain("观察时间");
   });
 
   test("skipped verification remains distinct from reachability", () => {

@@ -32,9 +32,9 @@ function RefreshButton({ label, onClick, fetching }: { label: string; onClick: (
 }
 
 function PageControls({ kind, offset, limit, total, fetching, onOffset }: { kind: "运行" | "请求"; offset: number; limit: number; total: number; fetching: boolean; onOffset: (offset: number) => void }) {
-  return <nav aria-label={`${kind}分页`} className="flex w-full items-center justify-between gap-3">
-    <span className="numeric text-xs text-muted-foreground">{offset + 1}–{Math.min(offset + limit, total)} / {total}</span>
-    <div className="flex gap-1">
+  return <nav aria-label={`${kind}分页`} className="flex w-full min-w-0 flex-wrap items-center justify-between gap-3">
+    <span className="numeric min-w-0 text-xs text-muted-foreground [overflow-wrap:anywhere]">{offset + 1}–{Math.min(offset + limit, total)} / {total}</span>
+    <div className="flex shrink-0 gap-1">
       <Button size="icon" variant="ghost" aria-label={`上一页${kind}`} disabled={offset === 0 || fetching} onClick={() => onOffset(Math.max(0, offset - limit))}><HugeiconsIcon icon={ArrowLeft01Icon} data-icon="inline-start" aria-hidden="true" /></Button>
       <Button size="icon" variant="ghost" aria-label={`下一页${kind}`} disabled={offset + limit >= total || fetching} onClick={() => onOffset(offset + limit)}><HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-start" aria-hidden="true" /></Button>
     </div>
@@ -125,8 +125,8 @@ export function ResultsWorkspace({ client, selectedRunID, onSelectRun, runAction
       void queryClient.invalidateQueries({ queryKey: ["requests", selectedID] });
     }
   }
-  return <TooltipProvider><div className="grid items-start gap-6 xl:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
-    <Card className="min-w-0 xl:sticky xl:top-6">
+  return <TooltipProvider><div className="grid min-w-0 grid-cols-1 items-start gap-6 @6xl/workspace:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">运行 {runs.data && <Badge variant="secondary">{runs.data.total}</Badge>}</CardTitle>
         <CardAction><RefreshButton label="刷新运行列表" onClick={refresh} fetching={runs.isFetching} /></CardAction>
@@ -137,8 +137,8 @@ export function ResultsWorkspace({ client, selectedRunID, onSelectRun, runAction
           <TableHeader className="sr-only"><TableRow><TableHead>运行</TableHead></TableRow></TableHeader>
           <TableBody>{runs.data?.items.map(item => <TableRow key={item.id} data-state={selectedID === item.id ? "selected" : undefined}>
             <TableCell>
-              <Button type="button" variant="ghost" onClick={() => select(item.id)} aria-current={selectedID === item.id ? "true" : undefined} aria-label={`查看运行 ${safeMessage(item.snapshot.spec.task_names.join(", ") || item.id)} · ${safeMessage(item.id)}`} title={safeMessage(item.id)} className="h-auto w-full flex-col items-start gap-2 whitespace-normal text-left">
-                <span className="max-w-full truncate">{safeMessage(item.snapshot.spec.task_names.join(", ") || item.id)}</span>
+              <Button type="button" variant="ghost" onClick={() => select(item.id)} aria-current={selectedID === item.id ? "true" : undefined} aria-label={`查看运行 ${safeMessage(item.snapshot.spec.task_names.join(", ") || item.id)} · ${safeMessage(item.id)}`} title={safeMessage(item.id)} className="h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal text-left [overflow-wrap:anywhere]">
+                <span className="min-w-0 max-w-full">{safeMessage(item.snapshot.spec.task_names.join(", ") || item.id)}</span>
                 <span className="flex w-full flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>{safeMessage(item.snapshot.model.display_name || item.snapshot.model.name)}</span><time dateTime={item.created_at}>{formatTime(item.created_at)}</time></span>
                 <RunState state={item.state} />
               </Button>
@@ -156,8 +156,8 @@ export function ResultsWorkspace({ client, selectedRunID, onSelectRun, runAction
         {run.isError && <ErrorNotice error={run.error} retry={() => void run.refetch()} title="无法读取此运行" />}
         {run.isPending ? <Card><CardHeader className="sr-only"><CardTitle>运行结果</CardTitle></CardHeader><CardContent><LoadingState label="正在接入运行记录…" /></CardContent></Card> : run.data && <>
           {runActions?.(run.data)}
-          <Card className="min-w-0"><RunDetailHeader run={run.data} /><CardContent><Tabs key={run.data.id} defaultValue="overview">
-            <div className="overflow-x-auto"><TabsList variant="line" aria-label="运行结果"><TabsTrigger value="overview">概览</TabsTrigger><TabsTrigger value="configuration">快照</TabsTrigger><TabsTrigger value="requests">请求</TabsTrigger><TabsTrigger value="events">诊断</TabsTrigger></TabsList></div>
+          <Card className="min-w-0"><RunDetailHeader run={run.data} /><CardContent className="min-w-0"><Tabs key={run.data.id} defaultValue="overview" className="min-w-0">
+            <TabsList variant="line" aria-label="运行结果" className="w-full flex-wrap justify-start gap-y-3 group-data-[orientation=horizontal]/tabs:h-auto"><TabsTrigger value="overview" className="h-9 flex-none">概览</TabsTrigger><TabsTrigger value="configuration" className="h-9 flex-none">快照</TabsTrigger><TabsTrigger value="requests" className="h-9 flex-none">请求</TabsTrigger><TabsTrigger value="events" className="h-9 flex-none">诊断</TabsTrigger></TabsList>
             <TabsContent value="overview" className="pt-4"><RunOverview run={run.data} /></TabsContent>
             <TabsContent value="configuration" className="pt-4"><RunSnapshotDetails run={run.data} /></TabsContent>
             <TabsContent value="requests" className="pt-4"><RequestsPanel key={run.data.id} client={client} run={run.data} /></TabsContent>

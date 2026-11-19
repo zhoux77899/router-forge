@@ -31,6 +31,10 @@ test("composer leaves stable metadata unresolved, hides old preview until explic
   expect(taskTrigger).toMatch(/\sdisabled(?:=|[ >])/);
   expect(html).toContain("创建草稿时重新解析实际任务来源"); expect(html).toContain("Harbor 默认容器安装"); expect(html).toContain("未知版本不能替代");
   expect(html).not.toContain("cached-preview-only"); expect(html).not.toContain("run-agent-version"); expect(html).not.toContain("显式容器 Agent 版本"); expect(html).not.toContain("0.25.0"); expect(html).not.toContain("冻结");
+  expect(html).toContain('aria-label="Agent 兼容性"'); expect(html).toContain('data-responsive="stacked"');
+  for (const label of ["Agent", "原生协议 / 兼容性", "宿主提示 / 独立命令"]) expect(html).toContain(`data-label="${label}"`);
+  const compatibilityTable = html.match(/<table\b[^>]*aria-label="Agent 兼容性"[^>]*>[\s\S]*?<\/table>/)?.[0];
+  expect(compatibilityTable).toBeDefined(); expect(compatibilityTable).not.toMatch(/min-w-\[(?:\d+)|overflow-x|truncate/);
   queryClient.clear();
 });
 

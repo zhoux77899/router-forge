@@ -3,8 +3,7 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@router-forge/ui/lib/utils"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { SidebarLeft01Icon } from "@hugeicons/core-free-icons"
+import { RiLayoutLeft2Line, RiLayoutLeftLine } from "@remixicon/react"
 import { Slot } from "radix-ui"
 
 import { useIsMobile } from "@router-forge/ui/lib/use-mobile"
@@ -235,6 +234,8 @@ function Sidebar({
       />
       <div
         data-slot="sidebar-container"
+        inert={state === "collapsed" && collapsible === "offcanvas" || undefined}
+        aria-hidden={state === "collapsed" && collapsible === "offcanvas" || undefined}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"
@@ -264,12 +265,16 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, openMobile, state, toggleSidebar } = useSidebar()
+  const expanded = isMobile ? openMobile : state === "expanded"
+  const Icon = expanded ? RiLayoutLeftLine : RiLayoutLeft2Line
 
   return (
     <Button
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      data-sidebar-action={expanded ? "collapse" : "expand"}
+      aria-expanded={expanded}
       variant="ghost"
       size="icon"
       className={cn("size-7", className)}
@@ -279,7 +284,7 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <HugeiconsIcon icon={SidebarLeft01Icon} aria-hidden="true" strokeWidth={2} data-icon="inline-start" />
+      <Icon aria-hidden="true" data-icon="inline-start" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )

@@ -13,7 +13,7 @@ import { FrozenNetworkDetails, hasProfiledNetwork, legacyHarborTLSLabel, RunNetw
 import { formatCost, formatTime, infrastructureLabel, missingObservation, rewardLabel, runtimeToolVersion, safeMessage, stateLabel, summaryToken } from "../lib/format";
 
 export function RunState({ state }: { state: string }) {
-  return <Badge variant={state === "failed" || state === "infra_error" ? "destructive" : activeRunStates.has(state) ? "default" : "secondary"}>
+  return <Badge variant={state === "failed" || state === "infra_error" ? "destructive" : activeRunStates.has(state) ? "default" : "secondary"} className="max-w-full whitespace-normal">
     {stateLabel(state)}
   </Badge>;
 }
@@ -24,17 +24,17 @@ export function MeteringSummary({ summary }: { summary: RequestSummary }) {
     ["cache_write_tokens", "缓存写入"], ["reasoning_tokens", "推理 Token（输出子项）"],
   ] as const;
   const costs = summary.costs ?? [];
-  return <section aria-label="请求账本" className="flex flex-col gap-4">
-    <dl className="grid grid-cols-2 gap-5 md:grid-cols-3 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:text-xs [&_dd]:font-semibold">
+  return <section aria-label="请求账本" className="@container/summary flex min-w-0 flex-col gap-4 [overflow-wrap:anywhere]">
+    <dl className="grid min-w-0 grid-cols-1 gap-5 [overflow-wrap:anywhere] @sm/summary:grid-cols-2 @2xl/summary:grid-cols-3 [&>div]:min-w-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:text-xs [&_dd]:font-semibold">
       <div><dt>请求 / 推理</dt><dd className="numeric">{summary.request_count} / {summary.inference_count}</dd></div>
       {fields.map(([field, label]) => <div key={field}><dt>{label}</dt><dd className="numeric">{summaryToken(summary, field)}</dd></div>)}
-      <div className="col-span-2 md:col-span-3"><dt>成本</dt><dd>
+      <div className="@sm/summary:col-span-2 @2xl/summary:col-span-3"><dt>成本</dt><dd>
         {costs.length ? <ul className="flex flex-wrap gap-x-6 gap-y-2">{costs.map(cost => <li key={cost.currency} className="flex flex-wrap items-baseline gap-2"><span className="numeric">{formatCost(cost.amount, cost.currency)}</span><span className="text-xs font-normal text-muted-foreground">{cost.estimated ? "按已配置价格估算" : "记录值"}</span></li>)}</ul> : "成本未知"}
       </dd></div>
     </dl>
     {(summary.unknown_usage_count > 0 || summary.unknown_cost_count > 0) && <div className="flex flex-wrap gap-2">
-      {summary.unknown_usage_count > 0 && <Badge variant="outline">{summary.unknown_usage_count} 条用量未知或不完整</Badge>}
-      {summary.unknown_cost_count > 0 && <Badge variant="outline">{summary.unknown_cost_count} 条成本未知</Badge>}
+      {summary.unknown_usage_count > 0 && <Badge variant="outline" className="max-w-full whitespace-normal">{summary.unknown_usage_count} 条用量未知或不完整</Badge>}
+      {summary.unknown_cost_count > 0 && <Badge variant="outline" className="max-w-full whitespace-normal">{summary.unknown_cost_count} 条成本未知</Badge>}
     </div>}
     <Collapsible className="flex flex-col gap-2">
       <CollapsibleTrigger asChild><Button size="sm" variant="ghost" className="group w-fit">
@@ -52,12 +52,12 @@ export function MeteringSummary({ summary }: { summary: RequestSummary }) {
 
 function AttemptRows({ attempt }: { attempt: Attempt }) {
   return <TableRow>
-    <TableCell className="max-w-44 align-top"><code className="block truncate text-xs" title={safeMessage(attempt.id)}>{safeMessage(attempt.id)}</code></TableCell>
-    <TableCell className="align-top"><RunState state={attempt.state} /></TableCell>
-    <TableCell className="min-w-40 whitespace-normal align-top"><span>{attempt.exception_type || attempt.error || attempt.state === "infra_error" ? infrastructureLabel(attempt) : "未记录异常"}</span>{attempt.error && <p className="mt-1 max-w-[55ch] break-words text-xs text-destructive">{safeMessage(attempt.error)}</p>}</TableCell>
-    <TableCell className="numeric align-top">{attempt.exit_code ?? "未知"}</TableCell>
-    <TableCell className="min-w-40 align-top">{rewardLabel(attempt.reward)}</TableCell>
-    <TableCell className="align-top text-xs"><span className="block">{formatTime(attempt.started_at)}</span><span className="text-muted-foreground">{formatTime(attempt.finished_at)}</span></TableCell>
+    <TableCell label="尝试" className="align-top"><code className="block text-xs" title={safeMessage(attempt.id)}>{safeMessage(attempt.id)}</code></TableCell>
+    <TableCell label="执行状态" className="align-top"><RunState state={attempt.state} /></TableCell>
+    <TableCell label="基础设施" className="align-top"><span>{attempt.exception_type || attempt.error || attempt.state === "infra_error" ? infrastructureLabel(attempt) : "未记录异常"}</span>{attempt.error && <p className="mt-1 text-xs text-destructive">{safeMessage(attempt.error)}</p>}</TableCell>
+    <TableCell label="CLI 退出码" className="numeric align-top">{attempt.exit_code ?? "未知"}</TableCell>
+    <TableCell label="Harbor 奖励" className="align-top">{rewardLabel(attempt.reward)}</TableCell>
+    <TableCell label="开始 / 结束" className="align-top text-xs"><span className="block">{formatTime(attempt.started_at)}</span><span className="text-muted-foreground">{formatTime(attempt.finished_at)}</span></TableCell>
   </TableRow>;
 }
 
@@ -65,7 +65,7 @@ export function RunOverview({ run }: { run: Run }) {
   const tasks = run.tasks ?? [];
   const missing = missingObservation(run.state);
   const profiledNetwork = hasProfiledNetwork(run);
-  return <div className="flex flex-col gap-6">
+  return <div className="flex min-w-0 flex-col gap-6 [overflow-wrap:anywhere]">
     <RunNetworkWarnings run={run} />
     {run.error && <ErrorNotice error={new Error(run.error)} title="执行错误" />}
     <MeteringSummary summary={run.summary} />
@@ -73,11 +73,11 @@ export function RunOverview({ run }: { run: Run }) {
     <section aria-label="任务与执行尝试" className="flex flex-col gap-4">
       {tasks.length === 0 ? <EmptyState title={run.state === "draft" ? "草稿尚未分配执行尝试" : "未记录执行尝试"} /> : tasks.map(task => <Card key={task.id}>
         <CardHeader>
-          <CardTitle>{safeMessage(task.name)}</CardTitle>
+          <CardTitle className="min-w-0">{safeMessage(task.name)}</CardTitle>
           <CardAction><RunState state={task.state} /></CardAction>
         </CardHeader>
         <CardContent>
-          {task.attempts?.length ? <Table aria-label={`${safeMessage(task.name)} 的执行尝试`}><TableHeader><TableRow><TableHead>尝试</TableHead><TableHead>执行状态</TableHead><TableHead>基础设施</TableHead><TableHead>CLI 退出码</TableHead><TableHead>Harbor 奖励</TableHead><TableHead>开始 / 结束</TableHead></TableRow></TableHeader><TableBody>{task.attempts.map(attempt => <AttemptRows key={attempt.id} attempt={attempt} />)}</TableBody></Table> : <EmptyState title="尚未产生尝试" />}
+          {task.attempts?.length ? <Table aria-label={`${safeMessage(task.name)} 的执行尝试`} responsive="stacked-wide"><TableHeader><TableRow><TableHead>尝试</TableHead><TableHead>执行状态</TableHead><TableHead>基础设施</TableHead><TableHead>CLI 退出码</TableHead><TableHead>Harbor 奖励</TableHead><TableHead>开始 / 结束</TableHead></TableRow></TableHeader><TableBody>{task.attempts.map(attempt => <AttemptRows key={attempt.id} attempt={attempt} />)}</TableBody></Table> : <EmptyState title="尚未产生尝试" />}
         </CardContent>
       </Card>)}
     </section>
@@ -103,8 +103,8 @@ export function RunOverview({ run }: { run: Run }) {
 }
 
 export function RunDetailHeader({ run }: { run: Run }) {
-  return <CardHeader className="min-w-0">
-    <CardTitle className="break-words">{safeMessage(run.snapshot.spec.task_names.join(", ") || "评测草稿")}</CardTitle>
+  return <CardHeader className="min-w-0 [overflow-wrap:anywhere]">
+    <CardTitle className="min-w-0">{safeMessage(run.snapshot.spec.task_names.join(", ") || "评测草稿")}</CardTitle>
     <CardDescription className="flex flex-wrap items-center gap-2">
       <span>{safeMessage(run.snapshot.model.display_name || run.snapshot.model.name)}</span>
       <Badge variant="outline">{protocolLabels[run.snapshot.model.protocol]}</Badge>

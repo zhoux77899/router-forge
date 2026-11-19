@@ -13,6 +13,11 @@ export interface Connection {
   worker_dir: string;
 }
 
+export interface FontFamily {
+  name: string;
+  monospaced: boolean;
+}
+
 export interface Response {
   status: number;
   body: string;
@@ -29,5 +34,17 @@ export const Console = {
   /** Request is a bounded loopback-only API transport, not a URL or filesystem proxy. */
   request(method: string, path: string, body: string): Promise<Response> {
     return call("Console.Request", method, path, body);
+  },
+} as const;
+
+/** Appearance exposes desktop-only fonts and native appearance controls. */
+export const Appearance = {
+  /** FontFamilies returns installed system families, refreshed after an app restart. */
+  fontFamilies(): Promise<FontFamily[]> {
+    return call("Appearance.FontFamilies");
+  },
+  /** SetTheme applies the preference to the app and the calling window's native controls. */
+  setTheme(source: string): Promise<void> {
+    return call("Appearance.SetTheme", source);
   },
 } as const;

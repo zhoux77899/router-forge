@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { APIClient, type Environment, type NetworkProfile } from "@router-forge/api";
-import { testEnvironment } from "@router-forge/ui/lib/fixtures.test-support";
+import { testAgent, testEnvironment, testInspection } from "@router-forge/ui/lib/fixtures.test-support";
 import { blankEnvironment, environmentFields, validateEnvironment } from "../lib/forms";
-import { EnvironmentsPanel } from "./environments";
+import { EnvironmentsPanel, InspectionResults } from "./environments";
 import { TextField } from "./fields";
 
 function sourceProfile(environmentID = testEnvironment.id, scope: "desktop" | "environment" = "environment"): NetworkProfile {
@@ -109,4 +109,19 @@ test("gateway host input appears only for an explicit manual mode and never cont
   const manual = { ...testEnvironment, docker_gateway_mode: "manual" as const, docker_host_gateway: "explicit.gateway" };
   const html = renderPanel([manual], manual.id);
   expect(inputTag(html, "env-gateway")).toContain('value="explicit.gateway"'); expect(html).toContain("Manual host address");
+});
+
+test("host and Agent diagnostics retain every labelled field and full long paths when stacked", () => {
+  const path = `D:\\tools\\${"long-tool-directory-".repeat(20)}\\harbor.exe`;
+  const output = `actual-tool-build-${"a".repeat(180)}`;
+  const command = `agent-command-${"b".repeat(180)}`;
+  const reason = `adapter-diagnostic-${"c".repeat(180)}`;
+  const inspection = { ...testInspection, tools: [{ name: "harbor", available: true, path, version_output: output, detail: "Full tool diagnostic" }], agents: [{ ...testAgent, path, command, reason, version: "full-host-version", container_install: "Default container policy retained" }] };
+  const before = JSON.stringify(inspection);
+  const html = renderToStaticMarkup(<InspectionResults inspection={inspection} />);
+  expect(html.match(/data-responsive="stacked"/g)).toHaveLength(2);
+  for (const label of ["工具", "状态", "版本 / 路径", "诊断", "Agent", "宿主版本", "Harbor / 原生协议", "容器安装与诊断"]) expect(html).toContain(`data-label="${label}"`);
+  for (const value of [path, output, command, reason, "Full tool diagnostic", "full-host-version", "Default container policy retained"]) expect(html).toContain(value);
+  expect(html).toContain("whitespace-pre-wrap"); expect(html).toContain("[overflow-wrap:anywhere]");
+  expect(html).not.toMatch(/overflow-x|truncate|min-w-\[(?:\d+)/); expect(JSON.stringify(inspection)).toBe(before);
 });

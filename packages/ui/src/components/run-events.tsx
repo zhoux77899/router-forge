@@ -13,13 +13,13 @@ import { formatTime, hasAgentObservation, missingObservation, runtimeToolVersion
 
 export function EventTimeline({ events }: { events: JobEvent[] }) {
   if (!events.length) return <EmptyState title="暂无诊断事件" />;
-  return <Table aria-label="运行事件时间线">
+  return <Table aria-label="运行事件时间线" responsive="stacked">
     <TableHeader><TableRow><TableHead>时间</TableHead><TableHead>事件</TableHead><TableHead>诊断</TableHead></TableRow></TableHeader>
     <TableBody>{events.map(event => <TableRow key={event.id}>
-      <TableCell className="align-top"><time className="numeric text-xs text-muted-foreground" dateTime={event.timestamp}>{formatTime(event.timestamp)}</time></TableCell>
-      <TableCell className="align-top"><Badge variant="outline">{safeMessage(event.kind)}</Badge></TableCell>
-      <TableCell className="min-w-64 whitespace-normal align-top">
-        <p className="whitespace-pre-wrap break-words">{safeMessage(event.message)}</p>
+      <TableCell label="时间" className="align-top"><time className="numeric text-xs text-muted-foreground" dateTime={event.timestamp}>{formatTime(event.timestamp)}</time></TableCell>
+      <TableCell label="事件" className="align-top"><Badge variant="outline" className="max-w-full whitespace-normal">{safeMessage(event.kind)}</Badge></TableCell>
+      <TableCell label="诊断" className="align-top">
+        <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{safeMessage(event.message)}</p>
         {event.attempt_id && <Collapsible className="mt-2">
           <CollapsibleTrigger asChild><Button size="sm" variant="ghost" className="group" aria-label={`查看事件 ${event.id} 的关联`}>
             关联
@@ -42,7 +42,7 @@ export function RunDiagnostics({ run }: { run: Run }) {
   const attempts = (run.tasks ?? []).flatMap(task => task.attempts ?? []);
   const runtime = run.snapshot.runtime;
   const missing = missingObservation(run.state);
-  return <section aria-label="执行记录" className="flex flex-col gap-4">
+  return <section aria-label="执行记录" className="flex min-w-0 flex-col gap-4 [overflow-wrap:anywhere]">
     <Accordion type="multiple" value={openSections} onValueChange={setOpenSections}>
       <AccordionItem value="network">
         <AccordionTrigger>冻结网络</AccordionTrigger>
@@ -60,7 +60,7 @@ export function RunDiagnostics({ run }: { run: Run }) {
               <div><dt>独立容器 Agent CLI 版本</dt><dd>{safeMessage(runtime?.agent_version || missing)}</dd></div>
               <div><dt>容器 Agent 观测时间 / 确认</dt><dd>{runtime?.agent_observed_at || missing} · {hasAgentObservation(runtime) ? "已保存独立观测" : "未完成独立版本观测确认"}</dd></div>
             </dl>
-            {runtime?.agent_version_output && <div><p className="mb-2 text-xs text-muted-foreground">容器 CLI 原始 --version 输出</p><pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{safeMessage(runtime.agent_version_output)}</pre></div>}
+            {runtime?.agent_version_output && <div><p className="mb-2 text-xs text-muted-foreground">容器 CLI 原始 --version 输出</p><pre className="min-w-0 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs [overflow-wrap:anywhere]">{safeMessage(runtime.agent_version_output)}</pre></div>}
             <p className="text-xs text-muted-foreground">独立版本观测必须在推理前成功并保存；后续失败或取消不抹去观测。镜像 tag 不代表实际 image digest。</p>
           </div>
         </AccordionContent>

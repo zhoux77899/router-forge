@@ -49,14 +49,18 @@ bun run build:backend
 bun run dev:desktop
 ```
 
-To build the local read-only dashboard and native Desktop bundle:
+To clean and rebuild the local read-only dashboard and native Desktop bundle:
 
 ```powershell
-bun run build:desktop
+bun run build
 ```
 
-`build:desktop` builds Web assets and backend/worker resources before the MyGo
-application. All build outputs are under the repository-root `build` directory:
+The root [build.sh](build.sh) can also be invoked with `bash build.sh` (Git Bash on
+Windows); `build:desktop` remains an alias. Every full build checks existing tools
+and dependencies, removes old output directories, then builds Web assets and
+backend/worker resources before the MyGo application. It does not install tools,
+start the GUI or run the installer. All build outputs are under the repository-root
+`build` directory:
 `dist` for read-only Web assets, `renderer` for the embedded Desktop frontend,
 `server` and `workers` for backend helpers, and `desktop` for native releases.
 Native application packaging is distinct from a Vite-only preview. Keep the
@@ -74,19 +78,16 @@ To test without changing your normal backend profile, pass an absolute directory
 ```
 
 `--data-dir` overrides `ROUTER_FORGE_DATA_DIR` and also places the native renderer's
-cache and logs inside that profile. If an existing app/backend is still using the
-default bundle, build into a separate output directory rather than stopping it:
-
-```powershell
-bun run build:web
-bun run build:backend
-bun run --cwd .\apps\desktop build -o ..\..\build\desktop-verified
-```
-
-The fresh bundle is under `build\desktop-verified\windows-amd64`; pass that
-absolute directory as `ROUTER_FORGE_NATIVE_BUNDLE_DIR` for the opt-in checks. The
-local installer is unsigned; signing and installer acceptance are not covered by
-the offline checks. Do not bypass an OS or browser security warning.
+cache and logs inside that profile. Close applications and backends using build
+outputs before a full build: the clean entry removes the complete `build` tree,
+including historical bundles, but preserves source assets, dependencies, tool
+caches and application data. It does not stop processes. Unsafe linked paths or
+failed build steps return a nonzero exit code; partial outputs are not a release.
+See [the build workflow](docs/agents/build.md) for cleanup boundaries and completion
+checks. Use `build\desktop\windows-amd64` as `ROUTER_FORGE_NATIVE_BUNDLE_DIR` for the
+opt-in checks. The local installer is unsigned; signing and installer acceptance
+are not covered by the offline checks. Do not bypass an OS or browser security
+warning.
 
 If a corporate proxy needs a private CA, use the organization's trusted CA bundle
 with Bun's `--cafile` option. Host build tools must keep TLS verification enabled;
@@ -225,14 +226,54 @@ Cost estimates use the approved price source and currency; they are not provider
 
 Desktop navigation contains **评测 (Evaluation)** and **结果 (Results)**. The sidebar
 footer opens Settings: appearance, execution environments, models, network and
-backend diagnostics. The custom titlebar keeps native window controls; macOS keeps
-its system application menu. Wide-screen sidebar expansion is remembered; narrow
-screens retain an icon rail with an overlay when expanded. Unsaved evaluation and
+backend diagnostics. Only the top sidebar button (or Ctrl/Cmd+B) changes sidebar
+visibility; there is no footer toggle. The borderless 40px Desktop titlebar extends
+expanded sidebar background and divider to the top, with the app icon, drag region
+and native window controls; macOS keeps its system application menu. Collapsing the
+Desktop sidebar hides it completely, including its titlebar background and divider,
+and releases its full width to the main content. Wide-screen expansion is remembered;
+narrow screens open an overlay without a persistent icon rail. Unsaved evaluation and
 settings forms survive page/category switches in memory, not a refresh; they are
 not autosaved or stored in browser storage. App-drawn text uses `text-xs` throughout.
 
 Web navigation contains Results only, with a read-only indicator and appearance-only
-settings in the sidebar footer. It has no application titlebar or native controls.
+settings in the sidebar footer. Its sole sidebar button is at the sidebar top,
+not in the page heading; it has no native titlebar or window controls. Desktop's
+titlebar shows a transparent theme-colored icon followed by the sidebar button,
+without a visible app name; on macOS both follow the native traffic-light inset.
+Web retains an interactive icon rail when collapsed and a narrow-screen expansion
+overlay. Both apps use Remix Icon for this functional toggle: `RiLayoutLeft2Line`
+expands and `RiLayoutLeftLine` collapses; other icons remain HugeIcons. The main page
+heading stays outside a thin vertical ScrollArea. Content fits the available width;
+narrow tables stack labelled fields rather than scrolling horizontally or hiding
+IDs, costs or diagnostics.
+
+Appearance uses shadcn Tabs for **Light**, **Dark** and **System**. System follows OS
+changes without overwriting the saved preference; an explicit mode ignores those
+changes. Desktop offers separate interface and code/numeric font selectors: the
+interface list includes all installed fonts, while the code list includes only
+installed monospaced fonts. Selection applies immediately; only chosen family names
+persist locally. After a successful catalog load, old non-monospaced or unavailable
+code choices are reset to the system default. Catalog failures or invalid choices
+fall back silently, without font notices or retry buttons; a failed catalog load
+does not clear a saved choice. New fonts appear after restart. Desktop does not
+download or bundle fonts, upload its catalog, or change native OS control fonts.
+
+Web loads pinned [FontSource CDN](https://fontsource.org/docs/getting-started/cdn)
+stylesheets: Geist Variable with Noto Sans SC Variable fallback for interface text,
+and Geist Mono Variable with Noto Sans Mono Variable fallback for code and numbers.
+Both stacks use Noto Sans SC for Chinese; the Mono CDN subsets do not cover CJK.
+Only the Web entry point uses the CDN. Blocked/offline font requests retain the
+system font fallback and do not prevent viewing local results.
+
+`assets\icon.svg` remains the unmodified source artwork. `bun run generate:icons`
+derives the 1024px Desktop PNG with its original white background, black artwork
+and 20% rounded corners; the outer corners are transparent. The titlebar uses a
+transparent monochrome mask that follows the app theme. Web uses transparent
+light/dark favicon SVGs selected by the system theme, independently of a manual
+page theme. Desktop and Web dev/build run generation automatically; keep all
+generated icon assets in sync with the source. MyGo generates executable and
+installer icon resources; do not hand-edit ICO files.
 
 The backend URL shown in Desktop **设置 → 诊断 (Settings → Diagnostics)** serves the built **read-only** Web dashboard on
 loopback. Its GET-only facade exposes results, events, request metadata and approved
@@ -301,7 +342,7 @@ bun test
 bun run test:go
 bun run build:web
 bun run build:backend
-bun run build:desktop
+bun run build
 ```
 
 The default tests use local mock providers and fixtures. They must not consume a

@@ -3,66 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { APIClient } from "@router-forge/api";
 import { TooltipProvider } from "@router-forge/ui/components/ui/tooltip";
-import { App, applyTheme, ConsoleWorkspace, readThemePreference, ThemeToggle, themePreferenceKey } from "./App";
+import { App, ConsoleWorkspace } from "./App";
 import type { DesktopConnection } from "./lib/native-client";
-
-function themeRoot() {
-  const classes = new Set(["existing-class"]);
-  return {
-    classes,
-    classList: {
-      toggle(token: string, force?: boolean) {
-        const enabled = force ?? !classes.has(token);
-        if (enabled) classes.add(token); else classes.delete(token);
-        return enabled;
-      },
-    },
-    style: { colorScheme: "" },
-  };
-}
-
-test("theme preference reads only its non-sensitive key and otherwise follows the system", () => {
-  const keys: string[] = [];
-  const storage = { getItem: (key: string) => { keys.push(key); return "dark"; } };
-  expect(readThemePreference(storage, false)).toBe("dark");
-  expect(keys).toEqual([themePreferenceKey]);
-  expect(readThemePreference({ getItem: () => "light" }, true)).toBe("light");
-  for (const saved of [null, "system", "unrecognized-value"]) {
-    expect(readThemePreference({ getItem: () => saved }, true)).toBe("dark");
-    expect(readThemePreference({ getItem: () => saved }, false)).toBe("light");
-  }
-  expect(readThemePreference(null, true)).toBe("dark");
-  expect(readThemePreference({ getItem: () => { throw new Error("Storage blocked"); } }, false)).toBe("light");
-});
-
-test("light and dark persistence writes only the theme and remains usable without storage", () => {
-  const root = themeRoot();
-  const writes: [string, string][] = [];
-  const storage = { setItem: (key: string, value: string) => { writes.push([key, value]); } };
-  applyTheme("dark", root);
-  expect(root.classes.has("dark")).toBe(true);
-  expect(root.style.colorScheme).toBe("dark");
-  expect(writes).toHaveLength(0);
-  applyTheme("light", root, storage);
-  applyTheme("dark", root, storage);
-  expect(writes).toEqual([[themePreferenceKey, "light"], [themePreferenceKey, "dark"]]);
-  expect(root.classes.has("existing-class")).toBe(true);
-  expect(() => applyTheme("light", root, { setItem: () => { throw new Error("Storage blocked"); } })).not.toThrow();
-  expect(root.classes.has("dark")).toBe(false);
-  expect(root.style.colorScheme).toBe("light");
-});
-
-test("theme toggle has an accessible name and exposes state without triggering a toggle on render", () => {
-  let toggles = 0;
-  for (const theme of ["light", "dark"] as const) {
-    const html = renderToStaticMarkup(<TooltipProvider><ThemeToggle theme={theme} onToggle={() => { toggles++; }} /></TooltipProvider>);
-    expect(html).toContain('aria-label="深色模式"');
-    expect(html).toContain(`aria-pressed="${theme === "dark"}"`);
-    expect(html).toContain('type="button"');
-    expect(html).toMatch(/<svg\b[^>]*aria-hidden="true"/);
-  }
-  expect(toggles).toBe(0);
-});
 
 test("ordinary browsers retain the MyGo-only control boundary and never render a control workspace", () => {
   const queryClient = new QueryClient();
@@ -77,7 +19,8 @@ test("ordinary browsers retain the MyGo-only control boundary and never render a
   queryClient.clear();
 });
 
-function workspaceMarkup() {
+function workspaceMarkup(sidebarOpen = true) {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   let calls = 0;
   const desktop: DesktopConnection = {
     api: new APIClient("", "", async () => { calls++; throw new Error("Rendering must not control the backend"); }),
@@ -86,17 +29,25 @@ function workspaceMarkup() {
   const queryClient = new QueryClient();
   queryClient.setQueryData(["status"], { running: true, version: "offline-native", pid: 246 });
   queryClient.setQueryData(["runs", 10, 0], { items: [], total: 0, limit: 10, offset: 0 });
-  const html = renderToStaticMarkup(<QueryClientProvider client={queryClient}><TooltipProvider><ConsoleWorkspace desktop={desktop} reconnect={() => { calls++; }} theme="light" onTheme={() => {}} /></TooltipProvider></QueryClientProvider>);
-  expect(calls).toBe(0);
-  queryClient.clear();
-  return html;
+  try {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "" }, localStorage: { getItem: (key: string) => key === "router-forge-sidebar-open" ? String(sidebarOpen) : null } } });
+    const html = renderToStaticMarkup(<QueryClientProvider client={queryClient}><TooltipProvider><ConsoleWorkspace desktop={desktop} reconnect={() => { calls++; }} theme="light" onTheme={() => {}} fonts={{ families: [], preferences: { interface: "system", code: "system" }, invalid: {}, loading: false, error: null, reload: () => {}, onSelect: () => {} }} /></TooltipProvider></QueryClientProvider>);
+    expect(calls).toBe(0);
+    return html;
+  } finally {
+    queryClient.clear();
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 }
 
 test("Desktop keeps only evaluation/results navigation and footer settings below native App chrome", () => {
   const html = workspaceMarkup();
   expect(html).toContain('data-slot="sidebar"');
   expect(html).toContain('aria-label="桌面控制台导航"');
-  expect(html).toContain('aria-label="切换导航栏"');
+  expect(html.match(/aria-label="切换导航栏"/g)).toHaveLength(1);
+  expect(html).toContain('data-slot="page-header"');
+  expect(html).toContain('data-slot="scroll-area-viewport"');
   expect(html).toContain('aria-current="page"');
   for (const label of ["结果", "评测", "设置"]) expect(html).toContain(label);
   const navigation = html.match(/<nav\b[^>]*aria-label="桌面控制台导航"[^>]*>([\s\S]*?)<\/nav>/)?.[1];
@@ -107,4 +58,23 @@ test("Desktop keeps only evaluation/results navigation and footer settings below
   const header = html.match(/<header\b[^>]*>([\s\S]*?)<\/header>/)?.[1];
   expect(header).toBeDefined();
   expect(header).not.toMatch(/<h1|深色模式|任务执行中|127\.0\.0\.1|PID|RouterForgeTest/);
+  expect(header).toContain('class="desktop-titlebar-controls"'); expect(header).toContain('aria-label="Router Forge"');
+  expect(header!.indexOf('aria-label="Router Forge"')).toBeLessThan(header!.indexOf('data-slot="sidebar-trigger"'));
+  expect(header!.replace(/<[^>]+>/g, "")).not.toContain("Router Forge");
+});
+
+test("Desktop restores a fully hidden sidebar with no icon rail or titlebar sidebar width", () => {
+  for (const open of [false, true]) {
+    const html = workspaceMarkup(open);
+    const header = html.match(/<header\b[^>]*data-slot="desktop-titlebar"[^>]*>/)?.[0] ?? "";
+    expect(header).toContain(`data-sidebar-state="${open ? "expanded" : "collapsed"}"`);
+    expect(header).toContain(`--desktop-sidebar-width:${open ? "var(--sidebar-width)" : "0px"}`);
+    expect(header).not.toContain("var(--sidebar-width-icon)");
+    expect(html).toContain(`data-collapsible="${open ? "" : "offcanvas"}"`);
+    expect(html).not.toContain('data-collapsible="icon"');
+    expect(html).not.toContain('data-mobile-rail="true"');
+    expect(html).toContain("group-data-[collapsible=offcanvas]:w-0");
+    expect(html.match(/aria-label="切换导航栏"/g)).toHaveLength(1);
+    expect(html).toContain(`data-sidebar-action="${open ? "collapse" : "expand"}"`);
+  }
 });

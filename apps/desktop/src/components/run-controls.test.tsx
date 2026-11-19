@@ -62,9 +62,10 @@ test("start confirmation displays saved package identity, hashes and all five fr
   const html = renderControls(draft);
   expect(html).toContain("saved-source-not-preview"); expect(html).toContain("approved-config-hash"); expect(html).toContain("2026-02-03T04:05:06Z"); expect(html).toContain(`sha256:${"b".repeat(64)}`);
   expect(html).toContain("未提供；使用 Package Digest"); expect(html).toContain("Harbor 默认容器安装"); expect(html).toContain("独立观测成功并落盘确认后才允许推理");
-  expect(html).toContain('aria-label="Frozen network profiles"');
+  expect(html).toContain('aria-label="Frozen network profiles"'); expect(html).toContain('data-responsive="stacked"');
+  for (const label of ["Stage", "Profile / revision", "TLS policy", "Trust"]) expect(html.split(`data-label="${label}"`)).toHaveLength(6);
   for (const stage of ["source", "build", "agent", "verifier", "model"]) expect(html).toContain(`revision-network_${stage}`);
-  expect(html).not.toContain("显式版本");
+  expect(html).not.toContain("显式版本"); expect(html).not.toMatch(/overflow-x|truncate|min-w-\[(?:\d+)/);
 });
 
 test("execution, model and payment checkboxes are distinct, unselected and linked to visible necessary warnings", () => {

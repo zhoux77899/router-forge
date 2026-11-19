@@ -5,9 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { APIClient, type NetworkProfile, type NetworkSnapshot } from "@router-forge/api";
 import { resultsClient } from "@router-forge/ui";
-import { TooltipProvider } from "@router-forge/ui/components/ui/tooltip";
 import { runFixture } from "@router-forge/ui/lib/fixtures.test-support";
-import { App, ThemeToggle } from "./App";
+import { App } from "./App";
 import { validateProxyOrigin } from "./proxy";
 
 test("Web entry uses same-origin read-only API, no native bridge or control surface", () => {
@@ -18,16 +17,56 @@ test("Web entry uses same-origin read-only API, no native bridge or control surf
   expect(html).toContain("只读 Web"); expect(html).not.toContain('type="password"'); expect(html).not.toContain("确认并启动这一个任务");
 });
 
-test("Web offers Results-only navigation and footer settings without a top area", () => {
+test("Web CJK fonts use the unicode-ranged FontSource package stylesheet without adding Desktop CDN requests", () => {
+  const html = readFileSync(join(import.meta.dir, "..", "index.html"), "utf8");
+  expect(html).toContain('href="https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc@5.3.1/index.css"');
+  expect(html).not.toContain("fontsource/css/noto-sans-sc");
+  expect(html.match(/rel="stylesheet"/g)).toHaveLength(4);
+  const desktop = readFileSync(join(import.meta.dir, "..", "..", "desktop", "index.html"), "utf8");
+  expect(desktop).not.toMatch(/cdn\.jsdelivr\.net|fontsource/);
+});
+
+test("Web keeps Results-only navigation and footer settings with its sole toggle at the sidebar top", () => {
   const cache = new QueryClient();
   const html = renderToStaticMarkup(<QueryClientProvider client={cache}><App /></QueryClientProvider>);
   expect(html).toContain('aria-label="Web 导航"');
   expect(html).toContain('aria-label="设置"');
-  expect(html).toContain('aria-label="切换导航栏"');
+  expect(html.match(/aria-label="切换导航栏"/g)).toHaveLength(1);
   expect(html).toContain('data-slot="sidebar-footer"');
-  expect(html).not.toContain("<header");
+  expect(html).toContain('data-slot="page-header"');
+  expect(html).toContain('data-slot="scroll-area-viewport"');
+  const sidebarHeader = html.match(/<div\b[^>]*data-slot="sidebar-header"[^>]*>([\s\S]*?)<\/div>/)?.[1];
+  const pageHeader = html.match(/<header\b[^>]*data-slot="page-header"[^>]*>([\s\S]*?)<\/header>/)?.[1];
+  expect(sidebarHeader).toContain('aria-label="切换导航栏"'); expect(pageHeader).not.toContain('aria-label="切换导航栏"');
+  expect(html).not.toContain('data-slot="desktop-titlebar"');
   expect(html).not.toContain("新建评测");
   cache.clear();
+});
+
+test("Web restores its collapsed icon rail instead of the Desktop offcanvas layout", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  try {
+    for (const open of [false, true]) {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search: "" }, matchMedia: () => ({ matches: false }), localStorage: { getItem: (key: string) => key === "router-forge-sidebar-open" ? String(open) : null } } });
+      const cache = new QueryClient();
+      try {
+        const html = renderToStaticMarkup(<QueryClientProvider client={cache}><App /></QueryClientProvider>);
+        expect(html).toContain(`data-collapsible="${open ? "" : "icon"}"`);
+        expect(html).not.toContain('data-collapsible="offcanvas"');
+        const container = html.match(/<div\b[^>]*data-slot="sidebar-container"[^>]*>/)?.[0] ?? "";
+        expect(container).not.toContain("inert=");
+        expect(container).not.toContain("aria-hidden=");
+        const header = html.match(/<div\b[^>]*data-slot="sidebar-header"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? "";
+        expect(header).toContain('aria-label="切换导航栏"');
+        expect(header).toContain(`data-sidebar-action="${open ? "collapse" : "expand"}"`);
+        expect(header).toContain(`aria-expanded="${open}"`);
+        expect(html.match(/aria-label="切换导航栏"/g)).toHaveLength(1);
+      } finally { cache.clear(); }
+    }
+  } finally {
+    if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 });
 
 test("Vite dev proxy is loopback-only and never takes control credentials", () => {
@@ -36,13 +75,6 @@ test("Vite dev proxy is loopback-only and never takes control credentials", () =
   for (const url of ["https://remote.test", "http://user:pass@127.0.0.1:1234", "http://127.0.0.1:1234?token=test", "http://127.0.0.1:1234/path"]) expect(() => validateProxyOrigin(url)).toThrow();
   const config = readFileSync(join(import.meta.dir, "..", "vite.config.ts"), "utf8");
   expect(config).toContain('host: "127.0.0.1"'); expect(config).toContain("configurePreviewServer: rejectMissingBackend"); expect(config).not.toMatch(/CONTROL_TOKEN|Authorization|VITE_.*KEY/);
-});
-
-test("theme actions have accessible toggle state in both Neutral modes", () => {
-  for (const dark of [false, true]) {
-    const html = renderToStaticMarkup(<TooltipProvider><ThemeToggle dark={dark} onToggle={() => {}} /></TooltipProvider>);
-    expect(html).toContain('aria-label="深色主题"'); expect(html).toContain(`aria-pressed="${dark}"`); expect(html).toContain('<button'); expect(html).toContain('aria-hidden="true"');
-  }
 });
 
 test("Web uses system light or dark without storing credentials or adding configuration controls", () => {

@@ -224,13 +224,35 @@ storage, transports or views:
   settings read-only; do not reconfigure/restart the daemon or pull an image to
   check networking. Do not change system trust or shared host package configuration.
 - Use React/shadcn composition, default Neutral black/white light/dark tokens and
-  HugeIcons. No ring/shadow effects, including focus and overlays; retain visible
+  HugeIcons, except Remix Icon for the functional sidebar toggle. No ring/shadow
+  effects, including focus and overlays; retain visible
   outline/border focus. Remove redundant secondary labels/descriptions, not accessible
   names, errors, server-identity/MITM disclosure or cost confirmation.
-- Keep Desktop main navigation limited to evaluation/results, with settings and
-  collapse in the sidebar footer. Web has results and appearance-only settings,
-  without a topbar or native controls. Retain the narrow-screen icon rail and use
-  an overlay for expansion; do not overwrite the saved wide-screen preference.
+- Keep Desktop main navigation limited to evaluation/results, with settings in
+  the sidebar footer. Keep only the top sidebar toggle: Desktop's custom titlebar
+  and Web's sidebar header. Use Remix Icon's RiLayoutLeft2Line to expand and
+  RiLayoutLeftLine to collapse, based on the actual desktop or mobile open state.
+  Desktop uses offcanvas: collapse hides all sidebar navigation, the width gap,
+  titlebar sidebar background and divider; hidden navigation must not take focus.
+  Web has results and appearance-only settings, not native chrome or controls.
+  Retain its interactive icon rail and narrow-screen expansion overlay; preserve
+  the saved wide-screen preference in both applications.
+- Keep page headings outside the shared vertical ScrollArea and its thin scrollbar.
+  Size content to the workspace, not the viewport. Stack labelled table fields at
+  narrow widths; do not hide IDs, cost precision or diagnostics to avoid overflow.
+- Persist Light/Dark/System as the preference, not System's current resolved color.
+  Use the shared shadcn Tabs and appearance hook. Desktop must coordinate MyGo's
+  application and native caption-button themes; browser/mocked tests cannot prove
+  Windows glyph colors. Font catalogs remain in Desktop memory; persist only the
+  two selected family names. Interface lists all installed fonts; code lists only
+  monospaced fonts. Reset invalid/non-monospaced code choices after a successful
+  catalog load, never on loading/error. Font failures are the explicit exception
+  to error feedback: use silent system defaults without font notices or retry UI.
+  Preserve non-font errors and keep FontSource CDN requests Web-only.
+- Keep `assets\icon.svg` as the source and run `bun run generate:icons` after changes.
+  Keep the rounded native PNG, transparent titlebar mask and light/dark favicon SVGs
+  in sync. The titlebar mark follows the app theme; favicon follows the system
+  independently. Desktop and Web dev/build generate assets; do not hand-edit ICOs.
 - Use `text-xs` for all App-drawn text, including headings, inputs and overlays;
   preserve icon sizes, hit targets and control heights. Native system UI is exempt.
   Keep visited evaluation/settings forms mounted in memory; never autosave drafts
@@ -262,15 +284,20 @@ bun run generate:contracts
 
 `internal/domain` defines the shared types. The Go generator writes OpenAPI and
 `openapi-typescript` writes the SDK types; do not hand-edit generated schemas.
-The native Desktop build additionally requires MyGo's platform prerequisites:
+The clean full build additionally requires Bash (Git Bash on Windows) and MyGo's
+platform prerequisites:
 
 ```text
-bun run build:desktop
+bun run build
 ```
+
+The root `build.sh` owns the clean full-build sequence; `build:desktop` is an alias.
+Read [the build workflow](docs/agents/build.md) before cleanup or packaging changes.
+Component build commands above remain targeted checks, not a clean full release.
 
 ### Optional production-bundle checks
 
-After `bun run build:desktop` on Windows amd64, run the production backend through
+After `bun run build` on Windows amd64, run the production backend through
 the actual Desktop Go bridge without opening a GUI:
 
 ```powershell

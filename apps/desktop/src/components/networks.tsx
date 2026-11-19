@@ -70,7 +70,7 @@ export function NetworkManager({ api }: { api: APIClient }) {
   }
   const environmentOptions = environments.data?.map((environment) => [environment.id, environment.name] as const) ?? [];
   const unavailable = busy !== "";
-  return <div className="grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+  return <div className="grid min-w-0 gap-6 @5xl/workspace:grid-cols-[16rem_minmax(0,1fr)]">
     <Card className="h-fit"><CardHeader className="flex-row items-center justify-between"><CardTitle>网络配置</CardTitle><Button variant="outline" size="icon" aria-label="新建网络配置" onClick={() => choose()} disabled={unavailable}><HugeiconsIcon icon={Add01Icon} /></Button></CardHeader><CardContent className="grid gap-1">
       {profiles.isPending ? <Skeleton className="h-8 w-full" aria-label="加载网络配置" /> : null}
       {profiles.error ? <FieldError>{profiles.error.message}</FieldError> : null}
@@ -120,9 +120,9 @@ export function NetworkManager({ api }: { api: APIClient }) {
 }
 
 export function NetworkCheckReadout({ check }: { check: NetworkCheckResult }) {
-  return <div className="grid gap-4">
+  return <div className="grid min-w-0 gap-4 [overflow-wrap:anywhere]">
     <Badge variant={check.reachable ? "secondary" : "destructive"} className="w-fit">{check.reachable ? "收到网络响应" : "网络连接失败"}</Badge>
-    <Table><TableBody>
+    <Table aria-label="网络连接检查"><TableBody>
       <TableRow><TableCell>HTTP</TableCell><TableCell>{check.http_status ?? "—"}</TableCell></TableRow>
       <TableRow><TableCell>TLS 证书</TableCell><TableCell>{check.tls_verified == null ? "—" : check.tls_verified ? "已验证" : "未验证"}</TableCell></TableRow>
       {check.ca_sha256 ? <TableRow><TableCell>CA SHA-256</TableCell><TableCell><code className="break-all">{check.ca_sha256}</code></TableCell></TableRow> : null}

@@ -91,7 +91,7 @@ export function RunNetworkWarnings({ run }: { run: Run }) {
 }
 
 function NetworkProfileDetails({ profile, phase }: { profile: NetworkProfile; phase: string }) {
-  return <div className="flex flex-col gap-3">
+  return <div className="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere]">
       <dl className="data-grid">
         <div><dt>配置 ID</dt><dd><code>{networkText(profile.id)}</code></dd></div>
         <div><dt>配置版本</dt><dd><code>{networkText(profile.revision)}</code></dd></div>
@@ -107,14 +107,14 @@ function NetworkProfileDetails({ profile, phase }: { profile: NetworkProfile; ph
         <div><dt>已保存 CA 路径</dt><dd>{networkText(profile.ca_cert_path)}</dd></div>
         <div><dt>此配置版本的风险确认</dt><dd>{profile.tls_risk_accepted === true ? "保存时已确认" : profile.tls_risk_accepted === false ? "保存时未确认" : "未记录"}</dd></div>
       </dl>
-      <Table aria-label={`${phase}的镜像与下载源`}>
+      <Table aria-label={`${phase}的镜像与下载源`} responsive="stacked">
         <TableHeader><TableRow><TableHead>来源</TableHead><TableHead>已选策略</TableHead><TableHead>已保存地址 / Sources</TableHead></TableRow></TableHeader>
         <TableBody>{mirrorSources.map(([key, label]) => {
           const source = profile.mirrors?.[key];
           return <TableRow key={key}>
-            <TableCell>{label}</TableCell>
-            <TableCell>{source?.mode === "native" ? "原生源（显式选择）" : source?.mode === "custom" ? "自定义" : "未记录"}</TableCell>
-            <TableCell className="max-w-96 whitespace-normal break-words">{source?.url && <code className="block">{networkURL(source.url)}</code>}{source?.sources && <pre className="whitespace-pre-wrap">{networkText(source.sources)}</pre>}{!source?.url && !source?.sources && "未记录"}</TableCell>
+            <TableCell label="来源">{label}</TableCell>
+            <TableCell label="已选策略">{source?.mode === "native" ? "原生源（显式选择）" : source?.mode === "custom" ? "自定义" : "未记录"}</TableCell>
+            <TableCell label="已保存地址 / Sources">{source?.url && <code className="block">{networkURL(source.url)}</code>}{source?.sources && <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{networkText(source.sources)}</pre>}{!source?.url && !source?.sources && "未记录"}</TableCell>
           </TableRow>;
         })}</TableBody>
       </Table>
@@ -123,23 +123,23 @@ function NetworkProfileDetails({ profile, phase }: { profile: NetworkProfile; ph
 
 export function FrozenNetworkDetails({ run }: { run: Run }) {
   const network = hasProfiledNetwork(run) ? run.snapshot.network : undefined;
-  return <section aria-label="冻结网络配置" className="flex flex-col gap-3">
-    <Table aria-label="分阶段冻结网络配置">
+  return <section aria-label="冻结网络配置" className="flex min-w-0 flex-col gap-3 [overflow-wrap:anywhere]">
+    <Table aria-label="分阶段冻结网络配置" responsive="stacked">
       <TableHeader><TableRow><TableHead>阶段</TableHead><TableHead>配置 / 宿主</TableHead><TableHead>代理</TableHead><TableHead>TLS / 信任</TableHead><TableHead>详情</TableHead></TableRow></TableHeader>
       {networkStages.map(([stage, label]) => {
         const profile = network?.[stage];
-        if (!profile) return <TableBody key={stage}><TableRow data-network-stage={stage}><TableCell>{label}</TableCell><TableCell colSpan={4}>未记录（不推定默认策略）</TableCell></TableRow></TableBody>;
+        if (!profile) return <TableBody key={stage}><TableRow data-network-stage={stage}><TableCell label="阶段">{label}</TableCell><TableCell label="配置 / 宿主、代理、TLS / 信任、详情" colSpan={4}>未记录（不推定默认策略）</TableCell></TableRow></TableBody>;
         return <Collapsible key={stage} asChild><TableBody>
           <TableRow data-network-stage={stage}>
-            <TableCell className="align-top">{label}</TableCell>
-            <TableCell className="align-top whitespace-normal">{networkText(profile.name)}<span className="block text-xs text-muted-foreground">{profile.scope === "desktop" ? "桌面宿主" : profile.scope === "environment" ? `执行环境 · ${networkText(profile.environment_id)}` : "宿主未记录"}</span></TableCell>
-            <TableCell className="align-top whitespace-normal">{profile.proxy_mode === "direct" ? "直连" : profile.proxy_mode === "proxy" ? <>代理<code className="block">{networkURL(profile.proxy_url)}</code></> : "未记录"}</TableCell>
-            <TableCell className="align-top"><Badge variant={profile.tls_mode === "skip" ? "destructive" : "outline"}>{profile.tls_mode === "verify" ? "验证 TLS" : profile.tls_mode === "skip" ? "跳过 TLS 验证" : "未记录"}</Badge><span className="block text-xs text-muted-foreground">{profile.trust_mode === "system" ? "系统信任库" : profile.trust_mode === "custom" ? "自定义 CA" : "信任策略未记录"}</span></TableCell>
-            <TableCell className="align-top"><CollapsibleTrigger asChild><Button size="sm" variant="ghost" className="group" aria-label={`查看${label}的冻结网络配置`}>
+            <TableCell label="阶段" className="align-top">{label}</TableCell>
+            <TableCell label="配置 / 宿主" className="align-top">{networkText(profile.name)}<span className="block text-xs text-muted-foreground">{profile.scope === "desktop" ? "桌面宿主" : profile.scope === "environment" ? `执行环境 · ${networkText(profile.environment_id)}` : "宿主未记录"}</span></TableCell>
+            <TableCell label="代理" className="align-top">{profile.proxy_mode === "direct" ? "直连" : profile.proxy_mode === "proxy" ? <>代理<code className="block">{networkURL(profile.proxy_url)}</code></> : "未记录"}</TableCell>
+            <TableCell label="TLS / 信任" className="align-top"><Badge variant={profile.tls_mode === "skip" ? "destructive" : "outline"} className="max-w-full whitespace-normal">{profile.tls_mode === "verify" ? "验证 TLS" : profile.tls_mode === "skip" ? "跳过 TLS 验证" : "未记录"}</Badge><span className="block text-xs text-muted-foreground">{profile.trust_mode === "system" ? "系统信任库" : profile.trust_mode === "custom" ? "自定义 CA" : "信任策略未记录"}</span></TableCell>
+            <TableCell label="详情" className="align-top"><CollapsibleTrigger asChild><Button size="sm" variant="ghost" className="group" aria-label={`查看${label}的冻结网络配置`}>
               详情<HugeiconsIcon icon={ArrowDown01Icon} data-icon="inline-end" className="transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
             </Button></CollapsibleTrigger></TableCell>
           </TableRow>
-          <CollapsibleContent forceMount asChild className="data-[state=closed]:hidden"><TableRow><TableCell colSpan={5} className="whitespace-normal"><NetworkProfileDetails profile={profile} phase={label} /></TableCell></TableRow></CollapsibleContent>
+          <CollapsibleContent forceMount asChild className="data-[state=closed]:hidden"><TableRow><TableCell colSpan={5}><NetworkProfileDetails profile={profile} phase={label} /></TableCell></TableRow></CollapsibleContent>
         </TableBody></Collapsible>;
       })}
     </Table>
@@ -163,7 +163,7 @@ export function RunSnapshotDetails({ run }: { run: Run }) {
   const preflightHarbor = harborHint?.version || harborHint?.version_output || (legacy || !runtime ? harbor_version : "");
   const preflightUV = uvHint?.version || uvHint?.version_output || (legacy || !runtime ? snapshot.uv_version : "");
   const resolvedTasks = snapshot.resolved_tasks ?? [];
-  return <div className="flex flex-col gap-6">
+  return <div className="flex min-w-0 flex-col gap-6 [overflow-wrap:anywhere]">
     <RunNetworkWarnings run={run} />
     <Accordion type="multiple" value={openSections} onValueChange={setOpenSections}>
     <AccordionItem value="configuration"><AccordionTrigger>已批准配置与执行边界</AccordionTrigger><AccordionContent forceMount hidden={!openSections.includes("configuration")}><section className="flex flex-col gap-3"><dl className="data-grid">
@@ -223,12 +223,12 @@ export function RunSnapshotDetails({ run }: { run: Run }) {
       {spec.agent_version && <div><dt>历史请求的 Agent 版本（非实际观测）</dt><dd>{safeMessage(spec.agent_version)}</dd></div>}
       <div><dt>宿主版本提示（不等于容器版本）</dt><dd>{safeMessage(agent.version || "宿主未报告版本")}</dd></div>
       <div><dt>独立容器版本命令</dt><dd><code className="text-xs">{safeMessage(agent.command ? `${agent.command} --version` : "未记录")}</code></dd></div>
-    </dl>{!profiledNetwork && <p className="text-xs text-muted-foreground">历史字段保留原值，不是实际 TLS 连接验证结果；未记录值不推定默认策略。</p>}{Object.keys(spec.agent_kwargs ?? {}).length > 0 && <div><p className="mb-2 text-xs text-muted-foreground">Agent 标量参数</p><pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{safeMessage(JSON.stringify(spec.agent_kwargs, null, 2))}</pre></div>}</section></AccordionContent></AccordionItem>
+    </dl>{!profiledNetwork && <p className="text-xs text-muted-foreground">历史字段保留原值，不是实际 TLS 连接验证结果；未记录值不推定默认策略。</p>}{Object.keys(spec.agent_kwargs ?? {}).length > 0 && <div><p className="mb-2 text-xs text-muted-foreground">Agent 标量参数</p><pre className="min-w-0 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs [overflow-wrap:anywhere]">{safeMessage(JSON.stringify(spec.agent_kwargs, null, 2))}</pre></div>}</section></AccordionContent></AccordionItem>
     <AccordionItem value="preflight"><AccordionTrigger>{legacy ? "历史工具版本记录" : "草稿预检工具（仅提示）"}</AccordionTrigger><AccordionContent forceMount hidden={!openSections.includes("preflight")}><section className="flex flex-col gap-3"><dl className="data-grid">
       <div><dt>Harbor · {legacy ? "历史记录" : "草稿预检"}</dt><dd>{safeMessage(preflightHarbor || "未记录")}</dd></div>
       <div><dt>uv · {legacy ? "历史记录" : "草稿预检"}</dt><dd>{safeMessage(preflightUV || "未记录")}</dd></div>
     </dl><p className="text-xs text-muted-foreground">预检仅提示，不限制开始时安装的版本；实际观测独立记录。</p>
-      {preflightTools.length > 0 && <Table aria-label="草稿预检工具"><TableHeader><TableRow><TableHead>预检工具</TableHead><TableHead>探测 / 版本</TableHead><TableHead>原始 --version 输出</TableHead></TableRow></TableHeader><TableBody>{preflightTools.map(tool => <TableRow key={tool.name}><TableCell>{safeMessage(tool.name)}<code className="block text-xs">{safeMessage(tool.path || "路径未记录")}</code></TableCell><TableCell>{tool.available ? "探测成功" : "不可用"} · {safeMessage(tool.version || (tool.version_output ? "未提取数值版本" : "未记录"))}</TableCell><TableCell className="max-w-96 whitespace-normal"><pre className="whitespace-pre-wrap break-words text-xs">{safeMessage(tool.version_output || "未记录")}</pre></TableCell></TableRow>)}</TableBody></Table>}
+      {preflightTools.length > 0 && <Table aria-label="草稿预检工具" responsive="stacked"><TableHeader><TableRow><TableHead>预检工具</TableHead><TableHead>探测 / 版本</TableHead><TableHead>原始 --version 输出</TableHead></TableRow></TableHeader><TableBody>{preflightTools.map(tool => <TableRow key={tool.name}><TableCell label="预检工具">{safeMessage(tool.name)}<code className="block text-xs">{safeMessage(tool.path || "路径未记录")}</code></TableCell><TableCell label="探测 / 版本">{tool.available ? "探测成功" : "不可用"} · {safeMessage(tool.version || (tool.version_output ? "未提取数值版本" : "未记录"))}</TableCell><TableCell label="原始 --version 输出"><pre className="whitespace-pre-wrap text-xs [overflow-wrap:anywhere]">{safeMessage(tool.version_output || "未记录")}</pre></TableCell></TableRow>)}</TableBody></Table>}
     </section></AccordionContent></AccordionItem>
     <AccordionItem value="runtime"><AccordionTrigger>开始后的实际执行观测（非批准配置）</AccordionTrigger><AccordionContent forceMount hidden={!openSections.includes("runtime")}><section className="flex flex-col gap-3"><dl className="data-grid">
       <div><dt>实际 Harbor 版本 / 输出</dt><dd>{runtimeToolVersion(runtime, "harbor", missing)}</dd></div>
@@ -238,13 +238,13 @@ export function RunSnapshotDetails({ run }: { run: Run }) {
       <div><dt>实际 Registry URL</dt><dd>{runtime?.registry_url ? safeURL(runtime.registry_url) : missing}</dd></div>
       <div><dt>实际任务名 / 路径</dt><dd>{safeMessage(runtime?.task_name || missing)}<code className="block text-xs">{safeMessage(runtime?.task_path || missing)}</code></dd></div>
     </dl>
-      {(runtime?.tools ?? []).length > 0 && <Table aria-label="实际工具观测"><TableHeader><TableRow><TableHead>实际工具</TableHead><TableHead>探测 / 版本</TableHead><TableHead>原始 --version 输出</TableHead></TableRow></TableHeader><TableBody>{runtime?.tools.map(tool => <TableRow key={tool.name}><TableCell>{safeMessage(tool.name)}<code className="block text-xs">{safeMessage(tool.path || "路径未记录")}</code></TableCell><TableCell>{tool.available ? "探测成功" : "不可用"} · {safeMessage(tool.version || (tool.version_output ? "未提取数值版本" : "未记录"))}</TableCell><TableCell className="max-w-96 whitespace-normal"><pre className="whitespace-pre-wrap break-words text-xs">{safeMessage(tool.version_output || "未记录")}</pre>{tool.detail && <p className="text-xs text-muted-foreground">{safeMessage(tool.detail)}</p>}</TableCell></TableRow>)}</TableBody></Table>}
+      {(runtime?.tools ?? []).length > 0 && <Table aria-label="实际工具观测" responsive="stacked"><TableHeader><TableRow><TableHead>实际工具</TableHead><TableHead>探测 / 版本</TableHead><TableHead>原始 --version 输出</TableHead></TableRow></TableHeader><TableBody>{runtime?.tools.map(tool => <TableRow key={tool.name}><TableCell label="实际工具">{safeMessage(tool.name)}<code className="block text-xs">{safeMessage(tool.path || "路径未记录")}</code></TableCell><TableCell label="探测 / 版本">{tool.available ? "探测成功" : "不可用"} · {safeMessage(tool.version || (tool.version_output ? "未提取数值版本" : "未记录"))}</TableCell><TableCell label="原始 --version 输出"><pre className="whitespace-pre-wrap text-xs [overflow-wrap:anywhere]">{safeMessage(tool.version_output || "未记录")}</pre>{tool.detail && <p className="text-xs text-muted-foreground">{safeMessage(tool.detail)}</p>}</TableCell></TableRow>)}</TableBody></Table>}
     </section></AccordionContent></AccordionItem>
     <AccordionItem value="agent"><AccordionTrigger>独立容器 Agent 观测（推理前必须完成）</AccordionTrigger><AccordionContent forceMount hidden={!openSections.includes("agent")}><section className="flex flex-col gap-3"><dl className="data-grid">
       <div><dt>实际容器 Agent CLI 版本</dt><dd>{safeMessage(runtime?.agent_version || missing)}</dd></div>
       <div><dt>容器 Agent 观测时间</dt><dd>{runtime?.agent_observed_at || missing}</dd></div>
       <div><dt>独立观测确认</dt><dd>{hasAgentObservation(runtime) ? "独立容器 CLI 版本已观测并保存" : `${missing} · 未完成独立版本观测确认`}</dd></div>
-    </dl>{runtime?.agent_version_output && <div><p className="mb-2 text-xs text-muted-foreground">容器 CLI 原始 --version 输出</p><pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">{safeMessage(runtime.agent_version_output)}</pre></div>}
+    </dl>{runtime?.agent_version_output && <div><p className="mb-2 text-xs text-muted-foreground">容器 CLI 原始 --version 输出</p><pre className="min-w-0 whitespace-pre-wrap rounded-md bg-muted p-3 text-xs [overflow-wrap:anywhere]">{safeMessage(runtime.agent_version_output)}</pre></div>}
       <p className="text-xs text-muted-foreground">独立容器 CLI 版本观测必须保存后才允许推理；宿主版本不能替代。后续失败或取消不抹去已经记录的版本。</p>
     </section></AccordionContent></AccordionItem>
     </Accordion>
