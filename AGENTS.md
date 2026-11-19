@@ -11,3 +11,7 @@ Use the default five-role triage vocabulary: `needs-triage`, `needs-info`, `read
 ### Domain docs
 
 Use a single-context domain-docs layout across applications and packages: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Build workflow
+
+Before cleaning artifacts, running a full build, or changing packaging, read `docs/agents/build.md`.
