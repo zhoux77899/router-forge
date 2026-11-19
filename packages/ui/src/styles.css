@@ -7,6 +7,8 @@
 
 :root {
   color-scheme: light;
+  --app-font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --app-font-mono: "Cascadia Code", Consolas, ui-monospace, monospace;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -68,7 +70,14 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+:root[data-app="web"] {
+  --app-font-sans: "Geist Variable", "Noto Sans SC Variable", system-ui, sans-serif;
+  --app-font-mono: "Geist Mono Variable", "Noto Sans Mono Variable", "Noto Sans SC Variable", ui-monospace, monospace;
+}
+
 @theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -118,7 +127,7 @@
     margin: 0;
     background: var(--background);
     color: var(--foreground);
-    font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-family: var(--app-font-sans);
     @apply text-xs;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -128,7 +137,8 @@
   button:not(:disabled), [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
   h1, h2, h3 { text-wrap: balance; }
   h1 { font-weight: 650; letter-spacing: -0.02em; }
-  code, pre, .numeric { font-family: "Cascadia Code", Consolas, ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  code, pre, .numeric { font-family: var(--app-font-mono); font-variant-numeric: tabular-nums; }
+  pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--foreground); outline-offset: 2px; }
   ::selection { background: var(--primary); color: var(--primary-foreground); }
   input::placeholder, textarea::placeholder { color: var(--muted-foreground); opacity: 1; }
@@ -155,7 +165,8 @@
 @keyframes ui-sheet-in { from { translate: var(--sheet-offset-x) var(--sheet-offset-y); } to { translate: 0 0; } }
 @keyframes ui-sheet-out { from { translate: 0 0; } to { translate: var(--sheet-offset-x) var(--sheet-offset-y); } }
 
-.desktop-workspace { padding-top: max(40px, var(--mygo-titlebar-height, 40px)); min-height: 100svh; }
+.app-workspace { height: 100svh; min-height: 0; min-width: 0; overflow: hidden; }
+.desktop-main { padding-top: max(40px, var(--mygo-titlebar-height, 40px)); }
 .desktop-titlebar {
   position: fixed;
   inset: 0 0 auto;
@@ -165,12 +176,50 @@
   height: max(40px, var(--mygo-titlebar-height, 40px));
   padding-left: calc(var(--mygo-titlebar-inset-left, 0px) + 8px);
   padding-right: calc(var(--mygo-titlebar-inset-right, 0px) + 8px);
-  border-bottom: 1px solid var(--border);
   background: var(--background);
   --app-region: drag;
 }
+.desktop-titlebar-sidebar {
+  position: absolute;
+  inset: 0;
+  background: var(--sidebar);
+  clip-path: inset(0 calc(100% - var(--desktop-sidebar-width)) 0 0);
+  transition: clip-path 200ms linear;
+  pointer-events: none;
+}
+.desktop-titlebar-divider {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 1px;
+  background: var(--sidebar-border);
+  transform: translateX(calc(var(--desktop-sidebar-width) - 1px));
+  transition: transform 200ms linear;
+  pointer-events: none;
+}
+.app-icon {
+  display: inline-block;
+  background-color: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+.desktop-titlebar-controls { position: relative; display: flex; align-items: center; gap: 8px; }
+.desktop-titlebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: calc(var(--sidebar-width-icon, 3rem) - 16px);
+  pointer-events: none;
+}
 .desktop-titlebar button { --app-region: no-drag; }
-.desktop-sidebar { top: max(40px, var(--mygo-titlebar-height, 40px)); height: calc(100svh - max(40px, var(--mygo-titlebar-height, 40px))); }
+.desktop-sidebar { top: 0; height: 100svh; padding-top: max(40px, var(--mygo-titlebar-height, 40px)); border-color: var(--sidebar-border); }
+.app-page-content { overflow-wrap: anywhere; }
+/* Radix's table wrapper must not expand a responsive page to max-content width. */
+.app-page-scroll [data-slot="scroll-area-viewport"] > div { display: block !important; width: 100%; min-width: 0 !important; }
 
 .console-layout { min-height: 100vh; display: grid; grid-template-columns: 208px minmax(0, 1fr); }
 .console-sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar); padding: 26px 16px 18px; gap: 26px; }
