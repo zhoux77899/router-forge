@@ -24,7 +24,7 @@ func main() {
 		mygo.App.SetPath(mygo.PathCache, filepath.Join(*dataDir, "renderer-cache"))
 		mygo.App.SetPath(mygo.PathLogs, filepath.Join(*dataDir, "renderer-logs"))
 	}
-	mygo.Bind(console)
+	mygo.Bind(console, &Appearance{})
 	if runtime.GOOS != "darwin" {
 		mygo.App.SetMenu(nil)
 	}
@@ -39,6 +39,9 @@ func main() {
 			TitleBarStyle:  mygo.TitleBarHidden,
 			TitleBarHeight: 40,
 		})
+		if err := setApplicationIcon(win); err != nil {
+			log.Fatal(err)
+		}
 		if result := nativeSmokeResultPath(); result != "" {
 			go verifyNativeWindow(win, result)
 		}

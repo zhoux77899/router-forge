@@ -10,6 +10,7 @@ export default defineConfig({
   identifier: "dev.routerforge.console",
   version: "0.1.0",
   main: ".",
+  icon: join("resources", "icon.png"),
   devUrl: "http://127.0.0.1:7789",
   devCommand: "bun run dev:renderer",
   buildCommand: "bun run build:renderer",

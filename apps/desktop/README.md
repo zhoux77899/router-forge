@@ -1,14 +1,29 @@
 # Router Forge Desktop
 
-MyGo v0.7.1 原生桌面是 Router Forge 的唯一配置、创建草稿、付费确认、启动和取消入口。React 19、TanStack Query、Vite 与共享 shadcn 组件提供评测、结果及设置视图；设置统一管理外观、执行环境、模型、网络和诊断。界面使用默认 Neutral 黑白明暗主题、HugeIcons 与 outline / border focus，不使用 ring / shadow；让布局解释流程，保留必要的无障碍名称、错误、风险与费用确认。普通浏览器打开此 renderer 时只显示原生桥接不可用提示，不回退到浏览器控制请求。
+MyGo v0.7.1 原生桌面是 Router Forge 的唯一配置、创建草稿、付费确认、启动和取消入口。React 19、TanStack Query、Vite 与共享 shadcn 组件提供评测、结果及设置视图；设置统一管理外观、执行环境、模型、网络和诊断。界面使用默认 Neutral 黑白明暗主题、HugeIcons 与 outline / border focus，侧栏切换功能按钮使用 Remix Icon；不使用 ring / shadow；让布局解释流程，保留必要的无障碍名称、错误、风险与费用确认。普通浏览器打开此 renderer 时只显示原生桥接不可用提示，不回退到浏览器控制请求。
 
 ## 导航与窗口
 
-主导航仅保留评测和结果；设置与侧栏展开/折叠位于底部。运行任务数显示在评测项，折叠时仍可见。宽屏记住展开偏好，窄屏保留图标栏并覆盖展开，选择页面后关闭覆盖层；Ctrl/Cmd+B 和顶栏按钮均可切换侧栏。
+主导航仅保留评测和结果；底部只保留设置入口，移除底部侧栏切换。运行任务数显示在展开的评测项。侧栏使用 shadcn offcanvas，隐藏时完全移出界面，不保留图标栏或宽度占位，隐藏的导航不能获得键盘焦点。宽屏记住展开偏好，窄屏只在打开时显示覆盖层，选择页面后关闭；Ctrl/Cmd+B 和唯一的顶栏按钮均可切换侧栏。隐藏时使用 Remix Icon 的 `RiLayoutLeft2Line` 显示，展开时使用 `RiLayoutLeftLine` 隐藏；移动覆盖层按实际开关状态显示图标。
 
-MyGo 隐藏标题栏模式由 App 绘制 40px 顶栏，保留系统窗口控件和对应平台占位。顶栏只包含侧栏按钮与拖动区域；Windows/Linux 不显示窗口菜单栏，macOS 保留系统应用菜单。App 自绘文字统一 `text-xs`，不缩小图标、控件高度或点击热区。
+MyGo 隐藏标题栏模式由 App 绘制 40px 沉浸式顶栏，无底部边框；展开时侧栏背景和右侧分隔线延伸至顶栏，并跟随侧栏宽度；隐藏时顶部对应背景区和分隔线一起消失，正文占满释放的宽度。顶栏依次为无背景、前景色跟随应用主题的图形 Icon 和侧栏按钮，不显示应用名；启动/连接界面也不显示应用名。保留系统窗口控件及平台占位，macOS 将整组控件放在红绿灯占位之后并保留系统应用菜单；Windows/Linux 不新增窗口菜单栏。App 自绘文字统一 `text-xs`，不缩小图标、控件高度或点击热区。
+
+页面主标题固定在共享 `PageFrame` 的纵向 `ScrollArea` 外；分类 Tabs、结果工具栏和卡片随正文滚动。滚动条为细纵向样式，内容按工作区宽度自适应；窄表格堆叠带标签的完整字段，不通过裁剪 ID、精度或日志消除横向溢出。
 
 设置及评测表单首次访问后保留在会话内，切换页面或设置分类不丢失未保存输入；不自动保存、不将表单或凭据写入浏览器存储，刷新不恢复草稿。后端 URL、版本/PID、重新附着及打开只读 Web 位于 **设置 → 诊断**。Web 仅有结果和外观设置，不提供原生控件或配置写入。
+
+## 外观与字体
+
+**设置 → 外观** 使用 shadcn Tabs 选择浅色、深色或跟随系统。保存的是模式偏好，系统变化不会将跟随系统冻结成某次解析的颜色；手动模式不被系统变化覆盖。切换同步更新 MyGo 应用主题与原生窗口按钮主题，界面字体设置不改变 OS 原生控件字体。
+
+界面字体展示全部本机已安装字体，代码/数字字体只展示已安装的等宽字体。选择立即生效，只在本机保存所选 family 名；不下载或捆绑字体，不上传清单，不持久化字体列表或文件路径。成功读取字体目录后，旧的非等宽或不可用代码字体选择会持久重置为系统默认，合法等宽选择保留；目录加载中或失败时不清除旧偏好。字体加载失败、不可用或无效时静默回退系统默认，不显示字体生效说明、恢复/错误提示或重试按钮；非字体错误不受影响。新安装的字体重启后出现，两个选择器均可恢复系统默认。
+
+| 用途 | Windows 默认回退栈 |
+| --- | --- |
+| 界面 | `Segoe UI Variable Text`, `Segoe UI`, `Microsoft YaHei`, `system-ui`, `sans-serif` |
+| 代码与数字 | `Cascadia Code`, `Consolas`, `ui-monospace`, `monospace` |
+
+`assets\icon.svg` 保持原始源文件不变；`bun run generate:icons` 派生 `resources\icon.png`，保留白底黑图案、裁为约 20% 圆角矩形且外角透明。该 PNG 用于原生窗口、Desktop favicon 和打包图标；自绘顶栏使用透明 `assets\icon-mark.svg` mask，前景色继承主题。Web 使用另行派生的无背景浅/深 SVG favicon，不使用 Desktop 的圆角底板。Desktop/Web dev/build 均自动生成这些资产；Windows executable 与 NSIS installer 图标由 MyGo 构建生成，不手写 ICO。
 
 ## 开发
 
@@ -27,10 +42,10 @@ Desktop 的 `dev` 脚本先运行 `prepare:helpers`（根 `build:backend`、`bui
 从仓库根目录：
 
 ```powershell
-bun run build:desktop
+bun run build
 ```
 
-根脚本先构建只读 Web 和真实 backend/workers，再运行本 app 的 `mygo build`。Windows amd64 输出：
+根 `build.sh`（也可用 `bash build.sh`，Windows 使用 Git Bash）每次先检查工具和依赖，再清理全部旧编译输出，构建只读 Web 和真实 backend/workers，最后运行本 app 的 `mygo build` 并核验产物。`build:desktop` 保留为同一入口的别名。构建前请关闭占用输出文件的应用/后端；脚本不会停止进程、安装工具或启动 GUI/安装包。清理边界与完成条件见[构建规则](../../docs/agents/build.md)。Windows amd64 输出：
 
 ```text
 build\desktop\windows-amd64\
@@ -96,7 +111,9 @@ Docker gateway 必须显式选择 **detect / manual**，manual 需填写地址�
 
 ## 修改与验证
 
-本次 UI 重构已在实际 Windows 原生包验证：无窗口菜单栏、最大化/最小化/恢复正常状态、后端仍响应、40px 拖动区域、138px 右侧原生控件占位，以及正文/标题 12px。浏览器验收覆盖宽窄屏导航、明暗主题、只读 Web、会话草稿保留及不写入浏览器存储。Win32 状态检查不等同于鼠标交互验收：拖动、双击、边缘缩放、Snap Layouts 和关闭按钮仍需手动检查；macOS 信号灯/系统菜单/全屏及 Linux 装饰行为需在对应系统验收。
+验收应覆盖实际 Windows 原生包的无窗口菜单栏、最大化/最小化/恢复、40px 顶栏的透明 Icon → 侧栏按钮顺序及无可见应用名、原生控件占位、12px 自绘文字、界面全部字体/代码仅等宽字体及即时/重启生效、旧代码选择迁移和字体失败静默回退。逐一确认浅色、深色、系统模式下的真实窗口按钮配色，并检查 executable、窗口/任务栏及 installer 图标；不运行安装包也可检查资源。浏览器验收覆盖真实宽窄 viewport、固定标题、纵向滚动、全部字段可读、CDN 字体加载/失败回退及 GET-only 边界。字体 CDN 的 `document.fonts.check()` 不能单独证明目标字体加载，需检查实际 FontFace 与网络资源。
+
+Win32 状态、DOM 和 mock 检查不能证明 Windows 按钮的像素颜色或鼠标交互：拖动、双击、边缘缩放、Snap Layouts 和关闭按钮仍需人工检查；macOS 信号灯/系统菜单/全屏及 Linux 装饰行为需在对应系统验收。未完成的原生/安装验收应明确说明，不把浏览器预览或离线 fixture 当作已发布应用验证。
 
 app manifest 已定义以下命令（在本目录执行；Bun 来自根 workspace 的 packageManager）：
 

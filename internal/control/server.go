@@ -417,7 +417,7 @@ func (s *Server) web(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "nonregular results asset")
 		return
 	}
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/fontsource/css/ https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc@5.3.1/index.css; font-src 'self' https://cdn.jsdelivr.net/fontsource/fonts/ https://cdn.jsdelivr.net/npm/@fontsource-variable/noto-sans-sc@5.3.1/files/; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
 	http.ServeContent(w, r, info.Name(), info.ModTime(), asset)
 }
 
